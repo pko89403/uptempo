@@ -12,3 +12,4 @@ Uptempo 개발에 참고할 외부 프로젝트·도구·아키텍처 리서치 
 | [architecture-patterns.md](architecture-patterns.md) | Uptempo에 적용 가능한 아키텍처 패턴 |
 | [ouroboros.md](ouroboros.md) | Ouroboros — Spec-first AI 워크플로우 엔진 심층 분석 |
 | [agent-teams.md](agent-teams.md) | Claude Code Agent Teams 멀티 에이전트 협업 패턴 |
+| [protocol-recommendation.md](protocol-recommendation.md) | 프로토콜 추천 엔진 설계 — 유스케이스 인터뷰 → 자동 추천 |
