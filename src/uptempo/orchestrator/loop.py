@@ -45,6 +45,7 @@ async def run_poll_loop(config: Config) -> None:
     agent_runner = AgentRunner(config)
     workflow_loader = WorkflowLoader()
     workflow_renderer = WorkflowRenderer()
+    reported_failures: dict[str, str] = {}
     retry_attempt = 0
 
     logger.info(
@@ -64,6 +65,7 @@ async def run_poll_loop(config: Config) -> None:
                 agent_runner=agent_runner,
                 workflow_loader=workflow_loader,
                 workflow_renderer=workflow_renderer,
+                reported_failures=reported_failures,
             )
         except Exception:
             delay = _backoff_delay(retry_attempt, config.agent.max_retry_backoff_ms)
@@ -85,6 +87,7 @@ async def _poll_tick(
     agent_runner: AgentRunner,
     workflow_loader: WorkflowLoader,
     workflow_renderer: WorkflowRenderer,
+    reported_failures: dict[str, str],
 ) -> None:
     """Execute a single poll-dispatch-run cycle."""
     issues = await tracker.fetch_issues()
@@ -145,11 +148,19 @@ async def _poll_tick(
 
             if not agent_result.success:
                 failure_reason = agent_result.error or "Agent run failed"
-                await tracker.add_comment(issue.id, report_renderer.to_markdown(report))
+                await _report_failure_once(
+                    tracker=tracker,
+                    report_renderer=report_renderer,
+                    report=report,
+                    issue_id=issue.id,
+                    failure_reason=failure_reason,
+                    reported_failures=reported_failures,
+                )
                 continue
 
             await tracker.update_issue_state(issue.id, config.tracker.done_state)
             await tracker.add_comment(issue.id, report_renderer.to_markdown(report))
+            reported_failures.pop(issue.id, None)
         except Exception as exc:
             failure_reason = str(exc)
             total_duration_ms = _duration_ms(started_at)
@@ -179,7 +190,14 @@ async def _poll_tick(
                 failure_reason=failure_reason,
             )
             try:
-                await tracker.add_comment(issue.id, report_renderer.to_markdown(report))
+                await _report_failure_once(
+                    tracker=tracker,
+                    report_renderer=report_renderer,
+                    report=report,
+                    issue_id=issue.id,
+                    failure_reason=failure_reason,
+                    reported_failures=reported_failures,
+                )
             except Exception:
                 logger.exception("issue_failure_comment_failed", issue_id=issue.id)
             logger.exception("issue_execution_failed", issue_id=issue.id)
@@ -222,3 +240,25 @@ def _resolve_workflow_path(config: Config) -> Path:
 
 def _duration_ms(started_at: float) -> int:
     return int((time.perf_counter() - started_at) * 1000)
+
+
+async def _report_failure_once(
+    *,
+    tracker: LinearClient,
+    report_renderer: ReportRenderer,
+    report: ExecutionReport,
+    issue_id: str,
+    failure_reason: str,
+    reported_failures: dict[str, str],
+) -> None:
+    previous_reason = reported_failures.get(issue_id)
+    if previous_reason == failure_reason:
+        logger.info(
+            "duplicate_failure_report_suppressed",
+            issue_id=issue_id,
+            failure_reason=failure_reason,
+        )
+        return
+
+    await tracker.add_comment(issue_id, report_renderer.to_markdown(report))
+    reported_failures[issue_id] = failure_reason

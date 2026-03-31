@@ -12,9 +12,10 @@ All workspace paths are validated to reside under the configured root.
 from __future__ import annotations
 
 import asyncio
+import shlex
 import shutil
 from enum import Enum, auto
-from pathlib import Path  # noqa: TC003
+from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 import structlog
@@ -53,10 +54,12 @@ class WorkspaceManager:
     }
 
     _root: Path
+    _project_root: Path
     _hooks: dict[HookStage, str]
 
     def __init__(self, config: Config) -> None:
         self._root = config.workspace.root.resolve()
+        self._project_root = self._root.parent
         self._hooks = {}
         for name, command in config.workspace.hooks.items():
             stage = self._HOOK_STAGE_MAP.get(name)
@@ -113,15 +116,16 @@ class WorkspaceManager:
         command = self._hooks.get(stage)
         if command is None:
             return
+        resolved_command = self._resolve_hook_command(command)
 
         logger.debug(
             "running_workspace_hook",
             stage=stage.name.lower(),
             workspace=str(workspace),
-            command=command,
+            command=resolved_command,
         )
         process = await asyncio.create_subprocess_shell(
-            command,
+            resolved_command,
             cwd=str(workspace),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -152,6 +156,31 @@ class WorkspaceManager:
             f"Workspace hook '{stage.name.lower()}' failed with exit code " f"{process.returncode}"
         )
         raise WorkspaceHookError(msg)
+
+    def _resolve_hook_command(self, command: str) -> str:
+        """Resolve script-like hook commands against the project root.
+
+        Hooks still run with ``cwd`` set to the workspace so relative file writes
+        land inside the workspace. Only the executable path is rewritten when the
+        first token points at a repo-relative script.
+        """
+        try:
+            tokens = shlex.split(command)
+        except ValueError:
+            return command
+        if not tokens:
+            return command
+
+        candidate = Path(tokens[0])
+        if candidate.is_absolute() or candidate.parts == ():
+            return command
+
+        resolved = (self._project_root / candidate).resolve()
+        if not resolved.exists():
+            return command
+
+        tokens[0] = str(resolved)
+        return shlex.join(tokens)
 
     def _validate_path(self, path: Path) -> None:
         """Ensure *path* is under the configured workspace root."""

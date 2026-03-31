@@ -82,6 +82,21 @@ class TestWorkspaceManager:
 
         assert info.path.exists()
 
+    async def test_relative_script_hook_resolves_from_project_root(self, tmp_path: Path):
+        script_path = tmp_path / "scripts" / "hooks" / "after-create.sh"
+        script_path.parent.mkdir(parents=True)
+        script_path.write_text(
+            "#!/usr/bin/env bash\nset -euo pipefail\nprintf 'ok' > created.txt\n",
+            encoding="utf-8",
+        )
+        script_path.chmod(0o755)
+
+        manager = _manager(tmp_path, hooks={"after_create": "scripts/hooks/after-create.sh"})
+
+        info = await manager.create("issue-5")
+
+        assert (info.path / "created.txt").read_text() == "ok"
+
     async def test_finalise_and_remove_ignore_hook_failures(self, tmp_path: Path):
         manager = _manager(
             tmp_path,

@@ -110,6 +110,7 @@ class TestPollTick:
             agent_runner=agent_runner,
             workflow_loader=WorkflowLoader(),
             workflow_renderer=WorkflowRenderer(),
+            reported_failures={},
         )
 
         tracker.update_issue_state.assert_awaited_once_with(issue.id, "Done")
@@ -154,6 +155,7 @@ class TestPollTick:
             agent_runner=agent_runner,
             workflow_loader=WorkflowLoader(),
             workflow_renderer=WorkflowRenderer(),
+            reported_failures={},
         )
 
         tracker.update_issue_state.assert_not_awaited()
@@ -163,3 +165,35 @@ class TestPollTick:
         workspace_mgr.finalise.assert_awaited_once()
         workspace_mgr.remove.assert_awaited_once()
         assert dispatcher._claims == {}
+
+    async def test_poll_tick_suppresses_duplicate_failure_comments(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        write_workflow(tmp_path)
+        config = make_config(tmp_path)
+        dispatcher = Dispatcher(config)
+        issue = make_issue()
+        reported_failures: dict[str, str] = {}
+
+        tracker = AsyncMock()
+        tracker.fetch_issues.return_value = [issue]
+
+        workspace_mgr = AsyncMock()
+        workspace_mgr.create.side_effect = RuntimeError("hook failed")
+        agent_runner = AsyncMock()
+
+        for _ in range(2):
+            await _poll_tick(
+                config=config,
+                tracker=tracker,
+                dispatcher=dispatcher,
+                workspace_mgr=workspace_mgr,
+                agent_runner=agent_runner,
+                workflow_loader=WorkflowLoader(),
+                workflow_renderer=WorkflowRenderer(),
+                reported_failures=reported_failures,
+            )
+
+        tracker.add_comment.assert_awaited_once()
+        assert reported_failures == {issue.id: "hook failed"}
