@@ -22,6 +22,7 @@ class Issue(BaseModel):
     identifier: str
     title: str
     description: str = ""
+    url: str = ""
     state: str = ""
     labels: list[Label] = Field(default_factory=list)
 
@@ -52,6 +53,7 @@ class Issue(BaseModel):
             identifier=str(node["identifier"]),
             title=str(node["title"]),
             description=str(node.get("description") or ""),
+            url=str(node.get("url") or ""),
             state=state_name,
             labels=labels,
         )

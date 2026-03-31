@@ -30,6 +30,7 @@ query FetchIssues($teamKey: String!) {
       identifier
       title
       description
+      url
       team {
         key
       }

@@ -90,8 +90,8 @@ class AgentRunner:
         result = response.get("result")
         if not isinstance(result, dict):
             raise RuntimeError("thread/start response missing result object")
-        thread_id = result.get("thread_id")
-        if not isinstance(thread_id, str) or not thread_id:
+        thread_id = self._extract_thread_id(result)
+        if thread_id is None:
             raise RuntimeError("thread/start response missing thread_id")
         return thread_id
 
@@ -120,9 +120,11 @@ class AgentRunner:
         prompt: str | None,
     ) -> AgentResult:
         """Internal turn loop without timeout handling."""
-        params: dict[str, Any] = {"thread_id": thread_id}
+        params: dict[str, Any] = {"threadId": thread_id}
         if prompt is not None:
-            params["prompt"] = prompt
+            params["input"] = [{"type": "text", "text": prompt}]
+        else:
+            params["input"] = []
 
         request_id = await transport.send("turn/start", params)
         output_parts: list[str] = []
@@ -139,7 +141,7 @@ class AgentRunner:
                     raise RuntimeError(f"turn/start failed: {message['error']}")
                 result = message.get("result")
                 if isinstance(result, dict):
-                    turn_id = self._coerce_identifier(result, "turn_id") or turn_id
+                    turn_id = self._extract_turn_id(result) or turn_id
                     output_parts.extend(_extract_text_fragments(result))
                 continue
 
@@ -153,7 +155,7 @@ class AgentRunner:
                 raise RuntimeError(f"JSON-RPC notification params must be an object for {method}")
 
             output_parts.extend(_extract_text_fragments(params_obj))
-            turn_id = self._coerce_identifier(params_obj, "turn_id") or turn_id
+            turn_id = self._extract_turn_id(params_obj) or turn_id
 
             if method == "turn/completed":
                 if turn_id is None:
@@ -181,17 +183,49 @@ class AgentRunner:
         transport: _JsonRpcTransport,
         request_id: int,
     ) -> dict[str, Any]:
-        message = await transport.receive()
-        if message.get("id") != request_id:
-            raise RuntimeError(f"Expected response id {request_id}, received {message.get('id')}")
-        if "error" in message:
-            raise RuntimeError(f"JSON-RPC request failed: {message['error']}")
-        return message
+        while True:
+            message = await transport.receive()
+            if "id" not in message:
+                # Ignore out-of-band notifications while waiting for a response.
+                continue
+            if message.get("id") != request_id:
+                raise RuntimeError(f"Expected response id {request_id}, received {message.get('id')}")
+            if "error" in message:
+                raise RuntimeError(f"JSON-RPC request failed: {message['error']}")
+            return message
 
     @staticmethod
     def _coerce_identifier(payload: dict[str, Any], key: str) -> str | None:
         value = payload.get(key)
         return value if isinstance(value, str) and value else None
+
+    @classmethod
+    def _extract_thread_id(cls, payload: dict[str, Any]) -> str | None:
+        """Extract thread identifier from legacy or modern app-server payloads."""
+        direct = cls._coerce_identifier(payload, "thread_id") or cls._coerce_identifier(
+            payload, "threadId"
+        )
+        if direct is not None:
+            return direct
+
+        thread_obj = payload.get("thread")
+        if isinstance(thread_obj, dict):
+            return cls._coerce_identifier(thread_obj, "id")
+        return None
+
+    @classmethod
+    def _extract_turn_id(cls, payload: dict[str, Any]) -> str | None:
+        """Extract turn identifier from legacy or modern app-server payloads."""
+        direct = cls._coerce_identifier(payload, "turn_id") or cls._coerce_identifier(
+            payload, "turnId"
+        )
+        if direct is not None:
+            return direct
+
+        turn_obj = payload.get("turn")
+        if isinstance(turn_obj, dict):
+            return cls._coerce_identifier(turn_obj, "id")
+        return None
 
 
 @dataclass(slots=True)
@@ -259,8 +293,8 @@ class _JsonRpcTransport:
     ) -> int:
         """Write a JSON-RPC request/notification to stdin."""
         message: dict[str, Any] = {"jsonrpc": "2.0", "method": method}
-        if params is not None:
-            message["params"] = params
+        # Codex app-server expects params to be present, even for parameterless methods.
+        message["params"] = params if params is not None else {}
         request_id = 0
         if expect_response:
             request_id = self._next_request_id

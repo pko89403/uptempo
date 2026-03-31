@@ -131,6 +131,27 @@ async def test_transport_send_receive_and_close() -> None:
 
 
 @pytest.mark.asyncio
+async def test_transport_send_includes_empty_params_when_omitted() -> None:
+    transport = _JsonRpcTransport(
+        stdout=FakeReader([]),
+        stdin=FakeWriter(),
+        process=FakeProcess(),
+    )
+
+    request_id = await transport.send("thread/start")
+
+    writer = transport._stdin
+    assert isinstance(writer, FakeWriter)
+    assert request_id == 1
+    assert json.loads(writer.writes[0]) == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "thread/start",
+        "params": {},
+    }
+
+
+@pytest.mark.asyncio
 async def test_transport_receive_raises_on_eof() -> None:
     transport = _JsonRpcTransport(
         stdout=FakeReader([]),
@@ -206,6 +227,25 @@ async def test_initialize_and_start_thread_success() -> None:
 
 
 @pytest.mark.asyncio
+async def test_start_thread_accepts_nested_thread_shape() -> None:
+    runner = AgentRunner(make_config())
+    transport = FakeTransport(
+        [
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": {"thread": {"id": "thread-modern"}},
+            }
+        ]
+    )
+
+    thread_id = await runner._start_thread(transport)  # type: ignore[arg-type]
+
+    assert thread_id == "thread-modern"
+    assert transport.sent == [("thread/start", None, True)]
+
+
+@pytest.mark.asyncio
 async def test_run_turn_success_aggregates_output() -> None:
     runner = AgentRunner(make_config())
     transport = FakeTransport(
@@ -227,7 +267,13 @@ async def test_run_turn_success_aggregates_output() -> None:
     assert result.thread_id == "thread-1"
     assert result.turn_id == "turn-1"
     assert result.output == "Hello world"
-    assert transport.sent == [("turn/start", {"thread_id": "thread-1", "prompt": "Prompt"}, True)]
+    assert transport.sent == [
+        (
+            "turn/start",
+            {"threadId": "thread-1", "input": [{"type": "text", "text": "Prompt"}]},
+            True,
+        )
+    ]
 
 
 @pytest.mark.asyncio
@@ -250,7 +296,7 @@ async def test_run_turn_failure_returns_unsuccessful_result() -> None:
     assert result.success is False
     assert result.output == "partial"
     assert result.error == "model_error"
-    assert transport.sent == [("turn/start", {"thread_id": "thread-2"}, True)]
+    assert transport.sent == [("turn/start", {"threadId": "thread-2", "input": []}, True)]
 
 
 class HangingTransport(FakeTransport):
