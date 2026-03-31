@@ -9,13 +9,23 @@ agent:
   temperature: 0.2
   max_concurrency: 4
   max_retry_backoff_ms: 30000
+  # Uptempo still reads Codex execution settings from agent.*, but the
+  # Symphony-compatible top-level codex.* aliases below are also supported.
 
 tracker:
-  team_key: "UPT"
-  poll_interval_ms: 10000
-  eligible_states: ["In Progress"]
-  done_state: "Done"
-  error_state: "Cancelled"
+  # Symphony-style project slug aliases to Uptempo's tracker.team_key.
+  project: "UPT"
+  active_states: ["In Progress"]
+  terminal_states:
+    done: "Done"
+    error: "Cancelled"
+
+polling:
+  interval_ms: 10000
+
+codex:
+  cmd: "codex"
+  turn_timeout_ms: 300000
 
 workspace:
   root: "./workspaces"

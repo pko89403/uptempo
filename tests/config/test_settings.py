@@ -97,6 +97,72 @@ class TestFromFrontmatter:
         assert cfg.workspace.root == Path("./workspaces")
         assert cfg.workspace.hooks == {"pre_push": "scripts/lint.sh"}
 
+    def test_from_frontmatter_accepts_symphony_aliases(self):
+        raw = {
+            "tracker": {
+                "project": "UPT",
+                "active_states": ["In Progress"],
+                "terminal_states": {"done": "Done", "error": "Cancelled"},
+            },
+            "polling": {"interval_ms": 15_000},
+            "agent": {
+                "model": "gpt-4o",
+                "temperature": 0.2,
+                "max_concurrency": 4,
+                "max_retry_backoff_ms": 30_000,
+            },
+            "codex": {
+                "cmd": "codex --profile uptempo",
+                "turn_timeout_ms": 120_000,
+            },
+            "workspace": {"root": "./workspaces"},
+            "hooks": {"before_run": "true"},
+        }
+
+        cfg = Config.from_frontmatter(raw)
+
+        assert cfg.tracker.team_key == "UPT"
+        assert cfg.tracker.poll_interval_ms == 15_000
+        assert cfg.tracker.eligible_states == ["In Progress"]
+        assert cfg.tracker.done_state == "Done"
+        assert cfg.tracker.error_state == "Cancelled"
+        assert cfg.agent.model == "gpt-4o"
+        assert cfg.agent.max_concurrency == 4
+        assert cfg.agent.codex_cmd == "codex --profile uptempo"
+        assert cfg.agent.turn_timeout_ms == 120_000
+        assert cfg.workspace.hooks == {"before_run": "true"}
+
+    def test_from_frontmatter_prefers_existing_runtime_keys_over_aliases(self):
+        raw = {
+            "tracker": {
+                "team_key": "CUR",
+                "project": "ALIAS",
+                "poll_interval_ms": 7_500,
+                "active_states": ["Alias State"],
+                "eligible_states": ["Current State"],
+                "done_state": "Shipped",
+                "error_state": "Failed",
+                "terminal_states": {"done": "Done", "error": "Cancelled"},
+            },
+            "polling": {"interval_ms": 15_000},
+            "agent": {
+                "model": "gpt-4o",
+                "codex_cmd": "codex --current",
+                "turn_timeout_ms": 90_000,
+            },
+            "codex": {"cmd": "codex --alias", "turn_timeout_ms": 120_000},
+        }
+
+        cfg = Config.from_frontmatter(raw)
+
+        assert cfg.tracker.team_key == "CUR"
+        assert cfg.tracker.poll_interval_ms == 7_500
+        assert cfg.tracker.eligible_states == ["Current State"]
+        assert cfg.tracker.done_state == "Shipped"
+        assert cfg.tracker.error_state == "Failed"
+        assert cfg.agent.codex_cmd == "codex --current"
+        assert cfg.agent.turn_timeout_ms == 90_000
+
     def test_from_frontmatter_merges_top_level_hooks_into_workspace_hooks(self):
         raw = {
             "tracker": {"team_key": "UPT"},
@@ -159,6 +225,7 @@ class TestDefaults:
         assert agent.temperature == 0.0
         assert agent.max_concurrency == 1
         assert agent.max_retry_backoff_ms == 60_000
+        assert agent.turn_timeout_ms == 300_000
         assert agent.codex_cmd == "codex"
 
         tracker = TrackerConfig(team_key="X")

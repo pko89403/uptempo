@@ -55,6 +55,7 @@ class Config(BaseModel):
         Resolves ``$ENV`` references against ``os.environ`` before validation.
         """
         resolved = cls._resolve_env(raw)
+        resolved = cls._normalize_aliases(resolved)
         hooks = resolved.get("hooks")
         if isinstance(hooks, dict):
             workspace = resolved.get("workspace")
@@ -66,6 +67,63 @@ class Config(BaseModel):
             merged_workspace["hooks"] = merged_hooks
             resolved["workspace"] = merged_workspace
         return cls(**resolved)
+
+    @staticmethod
+    def _normalize_aliases(raw: dict[str, Any]) -> dict[str, Any]:
+        """Normalize Symphony-shaped config aliases into Uptempo's runtime schema."""
+        normalized = dict(raw)
+
+        tracker = normalized.get("tracker")
+        merged_tracker = dict(tracker) if isinstance(tracker, dict) else {}
+        polling = normalized.get("polling")
+
+        if "team_key" not in merged_tracker:
+            for key in ("project", "project_slug", "slug"):
+                if key in merged_tracker:
+                    merged_tracker["team_key"] = merged_tracker[key]
+                    break
+        if "eligible_states" not in merged_tracker and "active_states" in merged_tracker:
+            merged_tracker["eligible_states"] = merged_tracker["active_states"]
+        if isinstance(polling, dict) and "poll_interval_ms" not in merged_tracker:
+            for key in ("interval_ms", "poll_interval_ms"):
+                if key in polling:
+                    merged_tracker["poll_interval_ms"] = polling[key]
+                    break
+
+        terminal_states = merged_tracker.get("terminal_states")
+        if isinstance(terminal_states, dict):
+            if "done_state" not in merged_tracker:
+                for key in ("done", "success", "completed"):
+                    if key in terminal_states:
+                        merged_tracker["done_state"] = terminal_states[key]
+                        break
+            if "error_state" not in merged_tracker:
+                for key in ("error", "failure", "failed", "cancelled"):
+                    if key in terminal_states:
+                        merged_tracker["error_state"] = terminal_states[key]
+                        break
+
+        if merged_tracker or isinstance(tracker, dict):
+            normalized["tracker"] = merged_tracker
+
+        agent = normalized.get("agent")
+        merged_agent = dict(agent) if isinstance(agent, dict) else {}
+        codex = normalized.get("codex")
+        if isinstance(codex, dict):
+            if "codex_cmd" not in merged_agent:
+                for key in ("cmd", "command"):
+                    if key in codex:
+                        merged_agent["codex_cmd"] = codex[key]
+                        break
+            if "turn_timeout_ms" not in merged_agent:
+                for key in ("turn_timeout_ms", "timeout_ms"):
+                    if key in codex:
+                        merged_agent["turn_timeout_ms"] = codex[key]
+                        break
+        if merged_agent or isinstance(agent, dict):
+            normalized["agent"] = merged_agent
+
+        return normalized
 
     @staticmethod
     def _resolve_env(value: Any) -> Any:
