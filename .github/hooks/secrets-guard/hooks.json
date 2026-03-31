@@ -1,0 +1,9 @@
+{
+  "hooks": [
+    {
+      "event": "PreToolUse",
+      "tools": ["file_write", "bash"],
+      "script": ".github/hooks/secrets-guard/secrets-guard.sh"
+    }
+  ]
+}
