@@ -7,6 +7,7 @@ directly.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -52,9 +53,25 @@ class Config(BaseModel):
 
         Resolves ``$ENV`` references against ``os.environ`` before validation.
         """
-        raise NotImplementedError
+        resolved = cls._resolve_env(raw)
+        return cls(**resolved)
 
     @staticmethod
     def _resolve_env(value: Any) -> Any:
         """Recursively replace ``$ENV_VAR`` strings with their values."""
-        raise NotImplementedError
+        if isinstance(value, str):
+            if value.startswith("$"):
+                env_key = value[1:]
+                logger.debug("resolving_env_var", key=env_key)
+                if env_key not in os.environ:
+                    raise KeyError(
+                        f"Environment variable '{env_key}' is not set "
+                        f"(referenced as '{value}')"
+                    )
+                return os.environ[env_key]
+            return value
+        if isinstance(value, dict):
+            return {k: Config._resolve_env(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [Config._resolve_env(item) for item in value]
+        return value
