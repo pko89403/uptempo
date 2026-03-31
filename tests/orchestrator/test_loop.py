@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from textwrap import dedent
 from typing import TYPE_CHECKING
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -82,6 +82,8 @@ class TestPollTick:
         issue = make_issue()
         workspace_path = tmp_path / "workspaces" / issue.id
         artifact_path = workspace_path / "proto" / "service.proto"
+        loop_logger = Mock()
+        monkeypatch.setattr("uptempo.orchestrator.loop.logger", loop_logger)
 
         tracker = AsyncMock()
         tracker.fetch_issues.return_value = [issue]
@@ -110,20 +112,23 @@ class TestPollTick:
             agent_runner=agent_runner,
             workflow_loader=WorkflowLoader(),
             workflow_renderer=WorkflowRenderer(),
-            reported_failures={},
         )
 
-        tracker.update_issue_state.assert_awaited_once_with(issue.id, "Done")
-        tracker.add_comment.assert_awaited_once()
-        comment_body = tracker.add_comment.await_args.args[1]
-        assert "UPT-1" in comment_body
-        assert "proto/service.proto" in comment_body
+        tracker.update_issue_state.assert_not_awaited()
+        tracker.add_comment.assert_not_awaited()
         workspace_mgr.prepare.assert_awaited_once()
         workspace_mgr.finalise.assert_awaited_once()
         workspace_mgr.remove.assert_awaited_once()
         assert dispatcher._claims == {}
+        assert any(
+            call.args == ("issue_execution_succeeded",)
+            and call.kwargs["issue_id"] == issue.id
+            and call.kwargs["report"]["issue_identifier"] == issue.identifier
+            and call.kwargs["report"]["generated_artifacts"][0]["path"] == "proto/service.proto"
+            for call in loop_logger.info.call_args_list
+        )
 
-    async def test_poll_tick_failure_adds_comment_and_releases_claim(
+    async def test_poll_tick_failure_logs_and_releases_claim(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.chdir(tmp_path)
@@ -132,6 +137,8 @@ class TestPollTick:
         dispatcher = Dispatcher(config)
         issue = make_issue()
         workspace_path = tmp_path / "workspaces" / issue.id
+        loop_logger = Mock()
+        monkeypatch.setattr("uptempo.orchestrator.loop.logger", loop_logger)
 
         tracker = AsyncMock()
         tracker.fetch_issues.return_value = [issue]
@@ -155,18 +162,21 @@ class TestPollTick:
             agent_runner=agent_runner,
             workflow_loader=WorkflowLoader(),
             workflow_renderer=WorkflowRenderer(),
-            reported_failures={},
         )
 
         tracker.update_issue_state.assert_not_awaited()
-        tracker.add_comment.assert_awaited_once()
-        comment_body = tracker.add_comment.await_args.args[1]
-        assert "generation failed" in comment_body
+        tracker.add_comment.assert_not_awaited()
         workspace_mgr.finalise.assert_awaited_once()
         workspace_mgr.remove.assert_awaited_once()
         assert dispatcher._claims == {}
+        assert any(
+            call.args == ("issue_execution_unsuccessful",)
+            and call.kwargs["issue_id"] == issue.id
+            and call.kwargs["report"]["failure_reason"] == "generation failed"
+            for call in loop_logger.warning.call_args_list
+        )
 
-    async def test_poll_tick_suppresses_duplicate_failure_comments(
+    async def test_poll_tick_workspace_failure_logs_and_releases_claim(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.chdir(tmp_path)
@@ -174,7 +184,8 @@ class TestPollTick:
         config = make_config(tmp_path)
         dispatcher = Dispatcher(config)
         issue = make_issue()
-        reported_failures: dict[str, str] = {}
+        loop_logger = Mock()
+        monkeypatch.setattr("uptempo.orchestrator.loop.logger", loop_logger)
 
         tracker = AsyncMock()
         tracker.fetch_issues.return_value = [issue]
@@ -183,17 +194,23 @@ class TestPollTick:
         workspace_mgr.create.side_effect = RuntimeError("hook failed")
         agent_runner = AsyncMock()
 
-        for _ in range(2):
-            await _poll_tick(
-                config=config,
-                tracker=tracker,
-                dispatcher=dispatcher,
-                workspace_mgr=workspace_mgr,
-                agent_runner=agent_runner,
-                workflow_loader=WorkflowLoader(),
-                workflow_renderer=WorkflowRenderer(),
-                reported_failures=reported_failures,
-            )
+        await _poll_tick(
+            config=config,
+            tracker=tracker,
+            dispatcher=dispatcher,
+            workspace_mgr=workspace_mgr,
+            agent_runner=agent_runner,
+            workflow_loader=WorkflowLoader(),
+            workflow_renderer=WorkflowRenderer(),
+        )
 
-        tracker.add_comment.assert_awaited_once()
-        assert reported_failures == {issue.id: "hook failed"}
+        tracker.update_issue_state.assert_not_awaited()
+        tracker.add_comment.assert_not_awaited()
+        workspace_mgr.remove.assert_not_awaited()
+        assert dispatcher._claims == {}
+        assert any(
+            call.args == ("issue_execution_failed",)
+            and call.kwargs["issue_id"] == issue.id
+            and call.kwargs["report"]["failure_reason"] == "hook failed"
+            for call in loop_logger.exception.call_args_list
+        )

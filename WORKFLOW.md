@@ -74,7 +74,7 @@ For complex issues requiring multiple protocols, the orchestrator will:
 1. Detect required protocols from issue keywords and labels.
 2. Delegate to specialized agents in parallel (up to {{ agent.max_concurrency }}).
 3. Cross-validate generated schemas via schema-reviewer.
-4. Consolidate results and update issue status.
+4. Consolidate results for handoff rather than owning tracker status updates.
 
 Available agents: api-architect, realtime-engineer, grpc-engineer, graphql-architect,
 event-engineer, integration-engineer, trpc-engineer, schema-reviewer.
