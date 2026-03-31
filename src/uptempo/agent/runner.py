@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import structlog
 
+from uptempo import __version__
+
 if TYPE_CHECKING:
     from uptempo.config.settings import Config
     from uptempo.workspace.manager import WorkspaceInfo
@@ -69,7 +71,13 @@ class AgentRunner:
 
     async def _initialize(self, transport: _JsonRpcTransport) -> None:
         """Send ``initialize`` and wait for the response, then ``initialized``."""
-        request_id = await transport.send("initialize", {"protocolVersion": "2025-01-01"})
+        request_id = await transport.send(
+            "initialize",
+            {
+                "protocolVersion": "2025-01-01",
+                "clientInfo": {"name": "uptempo", "version": __version__},
+            },
+        )
         response = await self._receive_response(transport, request_id)
         if "result" not in response:
             raise RuntimeError("initialize response missing result")

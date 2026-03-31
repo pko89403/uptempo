@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from uptempo import __version__
 from uptempo.agent.runner import AgentRunner, _JsonRpcTransport
 from uptempo.config.settings import AgentConfig, Config, TrackerConfig, WorkspaceConfig
 from uptempo.workspace.manager import WorkspaceInfo
@@ -104,7 +105,13 @@ async def test_transport_send_receive_and_close() -> None:
     process = FakeProcess(returncode=None)
     transport = _JsonRpcTransport(stdout=reader, stdin=writer, process=process)
 
-    request_id = await transport.send("initialize", {"protocolVersion": "2025-01-01"})
+    request_id = await transport.send(
+        "initialize",
+        {
+            "protocolVersion": "2025-01-01",
+            "clientInfo": {"name": "uptempo", "version": __version__},
+        },
+    )
     message = await transport.receive()
     await transport.close()
 
@@ -113,7 +120,10 @@ async def test_transport_send_receive_and_close() -> None:
         "jsonrpc": "2.0",
         "id": 1,
         "method": "initialize",
-        "params": {"protocolVersion": "2025-01-01"},
+        "params": {
+            "protocolVersion": "2025-01-01",
+            "clientInfo": {"name": "uptempo", "version": __version__},
+        },
     }
     assert message == {"jsonrpc": "2.0", "id": 1, "result": {"ok": True}}
     assert writer.closed is True
@@ -182,7 +192,14 @@ async def test_initialize_and_start_thread_success() -> None:
 
     assert thread_id == "thread-123"
     assert transport.sent == [
-        ("initialize", {"protocolVersion": "2025-01-01"}, True),
+        (
+            "initialize",
+            {
+                "protocolVersion": "2025-01-01",
+                "clientInfo": {"name": "uptempo", "version": __version__},
+            },
+            True,
+        ),
         ("initialized", None, False),
         ("thread/start", None, True),
     ]
