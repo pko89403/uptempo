@@ -16,7 +16,12 @@ async def test_run_loads_workflow_from_cwd(tmp_path, monkeypatch: pytest.MonkeyP
             """\
             ---
             tracker:
-              team_key: "UPT"
+              project: "UPT"
+              active_states: ["In Progress"]
+            polling:
+              interval_ms: 12000
+            codex:
+              cmd: "codex --profile local"
             ---
             Hello {{ issue.title }}
             """
@@ -31,3 +36,5 @@ async def test_run_loads_workflow_from_cwd(tmp_path, monkeypatch: pytest.MonkeyP
     run_poll_loop.assert_awaited_once()
     config = run_poll_loop.await_args.args[0]
     assert config.tracker.team_key == "UPT"
+    assert config.tracker.poll_interval_ms == 12_000
+    assert config.agent.codex_cmd == "codex --profile local"

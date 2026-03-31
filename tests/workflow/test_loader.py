@@ -17,12 +17,21 @@ VALID_WORKFLOW = dedent(
       model: "gpt-4o"
       temperature: 0.2
       max_concurrency: 4
+      max_retry_backoff_ms: 30000
 
     tracker:
-      team_key: "UPT"
-      poll_interval_ms: 10000
-      eligible_states: ["In Progress"]
-      done_state: "Done"
+      project: "UPT"
+      active_states: ["In Progress"]
+      terminal_states:
+        done: "Done"
+        error: "Cancelled"
+
+    polling:
+      interval_ms: 10000
+
+    codex:
+      cmd: "codex"
+      turn_timeout_ms: 300000
 
     workspace:
       root: "./workspaces"
@@ -70,9 +79,11 @@ class TestLoad:
 
         result = loader.load(wf_path)
 
-        assert result.config["tracker"]["team_key"] == "UPT"
+        assert result.config["tracker"]["project"] == "UPT"
+        assert result.config["polling"]["interval_ms"] == 10000
         assert result.config["agent"]["model"] == "gpt-4o"
         assert result.config["agent"]["temperature"] == 0.2
+        assert result.config["codex"]["cmd"] == "codex"
         assert "workspace" in result.config
         assert result.config["hooks"]["after_create"].startswith("git clone")
 
