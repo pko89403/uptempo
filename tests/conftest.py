@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Generator
 from unittest.mock import AsyncMock
 
 import pytest
