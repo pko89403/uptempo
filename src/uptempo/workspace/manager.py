@@ -11,15 +11,16 @@ All workspace paths are validated to reside under the configured root.
 
 from __future__ import annotations
 
+import asyncio
+import shutil
 from enum import Enum, auto
-from typing import TYPE_CHECKING
+from pathlib import Path  # noqa: TC003
+from typing import TYPE_CHECKING, ClassVar
 
 import structlog
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from uptempo.config.settings import Config
 
 logger = structlog.get_logger(__name__)
@@ -32,6 +33,10 @@ class HookStage(Enum):
     BEFORE_REMOVE = auto()
 
 
+class WorkspaceHookError(RuntimeError):
+    """Raised when a workspace hook exits unsuccessfully."""
+
+
 class WorkspaceInfo(BaseModel):
     issue_id: str
     path: Path
@@ -40,32 +45,113 @@ class WorkspaceInfo(BaseModel):
 class WorkspaceManager:
     """Manage isolated per-issue workspace directories."""
 
+    _HOOK_STAGE_MAP: ClassVar[dict[str, HookStage]] = {
+        "after_create": HookStage.AFTER_CREATE,
+        "before_run": HookStage.BEFORE_RUN,
+        "after_run": HookStage.AFTER_RUN,
+        "before_remove": HookStage.BEFORE_REMOVE,
+    }
+
     _root: Path
     _hooks: dict[HookStage, str]
 
     def __init__(self, config: Config) -> None:
         self._root = config.workspace.root.resolve()
         self._hooks = {}
+        for name, command in config.workspace.hooks.items():
+            stage = self._HOOK_STAGE_MAP.get(name)
+            if stage is None:
+                logger.warning("ignoring_unknown_workspace_hook", hook=name)
+                continue
+            self._hooks[stage] = command
 
     async def create(self, issue_id: str) -> WorkspaceInfo:
         """Create a workspace directory for *issue_id* and run ``after_create``."""
-        raise NotImplementedError
+        workspace_path = (self._root / issue_id).resolve()
+        self._validate_path(workspace_path)
+        await asyncio.to_thread(workspace_path.mkdir, parents=True, exist_ok=True)
+        await self._run_hook(HookStage.AFTER_CREATE, workspace_path)
+        return WorkspaceInfo(issue_id=issue_id, path=workspace_path)
 
     async def prepare(self, info: WorkspaceInfo) -> None:
         """Run ``before_run`` hook. Raises on failure to abort the attempt."""
-        raise NotImplementedError
+        self._validate_path(info.path)
+        await self._run_hook(HookStage.BEFORE_RUN, info.path)
 
     async def finalise(self, info: WorkspaceInfo) -> None:
         """Run ``after_run`` hook. Failures are logged and ignored."""
-        raise NotImplementedError
+        self._validate_path(info.path)
+        try:
+            await self._run_hook(HookStage.AFTER_RUN, info.path)
+        except WorkspaceHookError:
+            logger.warning(
+                "workspace_hook_failed_ignored",
+                stage=HookStage.AFTER_RUN.name.lower(),
+                issue_id=info.issue_id,
+                workspace=str(info.path),
+            )
 
     async def remove(self, info: WorkspaceInfo) -> None:
         """Run ``before_remove`` hook then delete the workspace directory."""
-        raise NotImplementedError
+        self._validate_path(info.path)
+        try:
+            await self._run_hook(HookStage.BEFORE_REMOVE, info.path)
+        except WorkspaceHookError:
+            logger.warning(
+                "workspace_hook_failed_ignored",
+                stage=HookStage.BEFORE_REMOVE.name.lower(),
+                issue_id=info.issue_id,
+                workspace=str(info.path),
+            )
+
+        if info.path.exists():
+            await asyncio.to_thread(shutil.rmtree, info.path)
 
     async def _run_hook(self, stage: HookStage, workspace: Path) -> None:
         """Execute the shell command registered for *stage*, if any."""
-        raise NotImplementedError
+        self._validate_path(workspace)
+        command = self._hooks.get(stage)
+        if command is None:
+            return
+
+        logger.debug(
+            "running_workspace_hook",
+            stage=stage.name.lower(),
+            workspace=str(workspace),
+            command=command,
+        )
+        process = await asyncio.create_subprocess_shell(
+            command,
+            cwd=str(workspace),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+
+        stdout_text = stdout.decode().strip()
+        stderr_text = stderr.decode().strip()
+        if process.returncode == 0:
+            logger.debug(
+                "workspace_hook_succeeded",
+                stage=stage.name.lower(),
+                workspace=str(workspace),
+                stdout=stdout_text,
+                stderr=stderr_text,
+            )
+            return
+
+        logger.error(
+            "workspace_hook_failed",
+            stage=stage.name.lower(),
+            workspace=str(workspace),
+            returncode=process.returncode,
+            stdout=stdout_text,
+            stderr=stderr_text,
+        )
+        msg = (
+            f"Workspace hook '{stage.name.lower()}' failed with exit code " f"{process.returncode}"
+        )
+        raise WorkspaceHookError(msg)
 
     def _validate_path(self, path: Path) -> None:
         """Ensure *path* is under the configured workspace root."""
