@@ -21,7 +21,6 @@ from uptempo.agent.runner import AgentRunner
 from uptempo.orchestrator.dispatcher import Dispatcher
 from uptempo.orchestrator.report import (
     ExecutionReport,
-    ReportRenderer,
     collect_generated_artifacts,
     collect_metrics,
 )
@@ -45,7 +44,6 @@ async def run_poll_loop(config: Config) -> None:
     agent_runner = AgentRunner(config)
     workflow_loader = WorkflowLoader()
     workflow_renderer = WorkflowRenderer()
-    reported_failures: dict[str, str] = {}
     retry_attempt = 0
 
     logger.info(
@@ -65,7 +63,6 @@ async def run_poll_loop(config: Config) -> None:
                 agent_runner=agent_runner,
                 workflow_loader=workflow_loader,
                 workflow_renderer=workflow_renderer,
-                reported_failures=reported_failures,
             )
         except Exception:
             delay = _backoff_delay(retry_attempt, config.agent.max_retry_backoff_ms)
@@ -87,7 +84,6 @@ async def _poll_tick(
     agent_runner: AgentRunner,
     workflow_loader: WorkflowLoader,
     workflow_renderer: WorkflowRenderer,
-    reported_failures: dict[str, str],
 ) -> None:
     """Execute a single poll-dispatch-run cycle."""
     issues = await tracker.fetch_issues()
@@ -101,8 +97,6 @@ async def _poll_tick(
 
     workflow_definition = workflow_loader.load(_resolve_workflow_path(config))
     issues_by_id = {issue.id: issue for issue in issues}
-    report_renderer = ReportRenderer()
-
     for claim in claims:
         issue = issues_by_id[claim.issue_id]
         workspace = None
@@ -148,19 +142,18 @@ async def _poll_tick(
 
             if not agent_result.success:
                 failure_reason = agent_result.error or "Agent run failed"
-                await _report_failure_once(
-                    tracker=tracker,
-                    report_renderer=report_renderer,
-                    report=report,
+                logger.warning(
+                    "issue_execution_unsuccessful",
                     issue_id=issue.id,
-                    failure_reason=failure_reason,
-                    reported_failures=reported_failures,
+                    report=report.model_dump(mode="json"),
                 )
                 continue
 
-            await tracker.update_issue_state(issue.id, config.tracker.done_state)
-            await tracker.add_comment(issue.id, report_renderer.to_markdown(report))
-            reported_failures.pop(issue.id, None)
+            logger.info(
+                "issue_execution_succeeded",
+                issue_id=issue.id,
+                report=report.model_dump(mode="json"),
+            )
         except Exception as exc:
             failure_reason = str(exc)
             total_duration_ms = _duration_ms(started_at)
@@ -189,18 +182,11 @@ async def _poll_tick(
                 ),
                 failure_reason=failure_reason,
             )
-            try:
-                await _report_failure_once(
-                    tracker=tracker,
-                    report_renderer=report_renderer,
-                    report=report,
-                    issue_id=issue.id,
-                    failure_reason=failure_reason,
-                    reported_failures=reported_failures,
-                )
-            except Exception:
-                logger.exception("issue_failure_comment_failed", issue_id=issue.id)
-            logger.exception("issue_execution_failed", issue_id=issue.id)
+            logger.exception(
+                "issue_execution_failed",
+                issue_id=issue.id,
+                report=report.model_dump(mode="json"),
+            )
         finally:
             if workspace is not None:
                 if attempted_run:
@@ -240,25 +226,3 @@ def _resolve_workflow_path(config: Config) -> Path:
 
 def _duration_ms(started_at: float) -> int:
     return int((time.perf_counter() - started_at) * 1000)
-
-
-async def _report_failure_once(
-    *,
-    tracker: LinearClient,
-    report_renderer: ReportRenderer,
-    report: ExecutionReport,
-    issue_id: str,
-    failure_reason: str,
-    reported_failures: dict[str, str],
-) -> None:
-    previous_reason = reported_failures.get(issue_id)
-    if previous_reason == failure_reason:
-        logger.info(
-            "duplicate_failure_report_suppressed",
-            issue_id=issue_id,
-            failure_reason=failure_reason,
-        )
-        return
-
-    await tracker.add_comment(issue_id, report_renderer.to_markdown(report))
-    reported_failures[issue_id] = failure_reason
