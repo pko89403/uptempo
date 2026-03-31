@@ -27,6 +27,13 @@ GENERATORS = [
 ]
 
 _IDS = [name for _, name in GENERATORS]
+_CORE_IDS = {"OpenApiGenerator", "ProtoGenerator", "ThriftGenerator", "WebSocketGenerator"}
+_STUB_GENERATORS = [
+    (module_path, class_name)
+    for module_path, class_name in GENERATORS
+    if class_name not in _CORE_IDS
+]
+_STUB_IDS = [name for _, name in _STUB_GENERATORS]
 
 
 def _load_class(module_path: str, class_name: str) -> type:
@@ -67,11 +74,11 @@ def test_generator_inherits_from_base(module_path: str, class_name: str) -> None
 
 
 # ------------------------------------------------------------------
-# Abstract method stubs raise NotImplementedError
+# Non-core generators remain unimplemented in this branch
 # ------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(("module_path", "class_name"), GENERATORS, ids=_IDS)
+@pytest.mark.parametrize(("module_path", "class_name"), _STUB_GENERATORS, ids=_STUB_IDS)
 def test_generate_raises_not_implemented(
     module_path: str,
     class_name: str,
@@ -84,7 +91,7 @@ def test_generate_raises_not_implemented(
         instance.generate(sample_issue, tmp_path)
 
 
-@pytest.mark.parametrize(("module_path", "class_name"), GENERATORS, ids=_IDS)
+@pytest.mark.parametrize(("module_path", "class_name"), _STUB_GENERATORS, ids=_STUB_IDS)
 def test_validate_raises_not_implemented(
     module_path: str,
     class_name: str,
