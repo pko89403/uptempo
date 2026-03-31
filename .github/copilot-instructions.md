@@ -6,6 +6,69 @@ REST/OpenAPI, gRPC/Protobuf, Thrift, WebSocket 스키마 파일을 자동 생성
 [openai/symphony SPEC.md](https://github.com/openai/symphony/blob/main/SPEC.md) 오케스트레이션
 모델을 따릅니다: Linear 폴링 → 격리된 워크스페이스 생성 → 코딩 에이전트 실행 → 스키마 PR 생성.
 
+## 개발 환경: bare repo + worktree + tmux
+
+이 프로젝트는 **1 worktree = 1 branch = 1 Copilot CLI** 원칙으로 병렬 개발합니다.
+
+```
+uptempo.git/                 ← bare repo (중앙 허브, 모든 ref 소유)
+uptempo-trees/               ← worktree 루트
+  ├── .locks/                ← 에이전트 lock 파일 (1 worktree = 1 에이전트 보장)
+  ├── main/                  ← orchestrator 전용 (모니터링 + 최종 merge)
+  ├── integration/           ← 공통 변경 통합 브랜치
+  ├── feat-orchestrator/     ← 기능별 worktree (에이전트 1)
+  ├── feat-schema-openapi/   ← 기능별 worktree (에이전트 2)
+  └── feat-schema-proto/     ← 기능별 worktree (에이전트 3)
+```
+
+### 핵심 규칙
+
+- **같은 worktree를 두 에이전트가 공유하지 않습니다.** lock 파일(`uptempo-trees/.locks/`)로 보장.
+- **main은 orchestrator 전용입니다.** 직접 코드를 수정하지 않고, merge만 수행합니다.
+- **공통 변경(shared models, utils 등)은 integration 브랜치**에서 작업 후 feature들에 sync합니다.
+- **끝난 작업은 `wt remove`로 회수합니다.**
+
+### 워크플로우
+
+```bash
+# 초기 설정 (1회)
+bash scripts/setup-bare.sh
+
+# 이후 작업은 uptempo-trees/main에서 수행
+cd ~/PERSONAL/uptempo-trees/main
+
+# worktree 관리
+bash scripts/wt add feat/schema-openapi       # 새 worktree + 브랜치 생성
+bash scripts/wt list                           # 전체 worktree 현황
+bash scripts/wt launch feat/schema-openapi     # tmux + Copilot CLI 실행
+bash scripts/wt merge feat/schema-openapi      # integration에 병합
+bash scripts/wt sync                           # integration → 모든 feature rebase
+bash scripts/wt remove feat/schema-openapi     # 완료된 worktree 회수
+
+# 여러 에이전트를 한 번에 구성
+bash scripts/tmux-orchestra.sh feat/orchestrator feat/schema-openapi feat/schema-proto
+```
+
+### 브랜치 전략
+
+```
+main ──────────────────────────────────────── (최종 안정 코드)
+  │
+  ├── integration ─────────────────────────── (공통 변경 통합)
+  │     ↑ merge        ↓ rebase/sync
+  ├── feat/orchestrator ───────────────────── (에이전트 A)
+  ├── feat/schema-openapi ─────────────────── (에이전트 B)
+  ├── feat/schema-proto ───────────────────── (에이전트 C)
+  └── feat/demo-api ───────────────────────── (에이전트 D)
+```
+
+### Copilot CLI 에이전트 격리 원칙
+
+- 각 에이전트는 자신의 worktree 디렉토리 안에서만 파일을 수정합니다.
+- 다른 에이전트의 worktree 경로에 절대 접근하지 않습니다.
+- 공통 코드가 필요하면 integration 브랜치에 요청하고, `wt sync`로 받습니다.
+- 충돌이 발생하면 해당 worktree에서 로컬로 해결합니다.
+
 ## 아키텍처
 
 ```

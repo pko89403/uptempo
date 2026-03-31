@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+# scripts/wt — worktree 관리 + Copilot CLI 에이전트 실행
+#
+# 사용법:
+#   wt add <branch>          새 worktree + 브랜치 생성
+#   wt remove <branch>       worktree 정리 및 회수
+#   wt list                  모든 worktree 상태 표시
+#   wt launch <branch>       tmux pane에서 Copilot CLI 실행
+#   wt merge <branch>        integration 브랜치에 병합
+#   wt sync                  integration → 각 feature worktree에 rebase
+#
+# 규칙:
+#   - 1 worktree = 1 branch = 1 Copilot CLI
+#   - 같은 worktree를 두 에이전트가 공유하지 않음 (lock 파일로 보장)
+#   - orchestrator(main)만 최종 merge 담당
+
+set -euo pipefail
+
+# ── 경로 해석 ──────────────────────────────────────────
+resolve_paths() {
+  # bare repo와 trees 디렉토리 자동 탐색
+  local script_dir
+  script_dir="$(cd "$(dirname "$0")" && pwd)"
+
+  # scripts/wt가 worktree 안에 있는 경우
+  if [[ -f "${script_dir}/../.git" ]] || [[ -d "${script_dir}/../.git" ]]; then
+    local git_dir
+    git_dir="$(git -C "${script_dir}/.." rev-parse --git-common-dir 2>/dev/null)"
+    BARE_DIR="$(cd "${git_dir}" && pwd)"
+  elif [[ -f "${script_dir}/../HEAD" ]]; then
+    BARE_DIR="$(cd "${script_dir}/.." && pwd)"
+  else
+    echo "❌ bare repo를 찾을 수 없습니다." >&2
+    exit 1
+  fi
+
+  TREES_DIR="$(dirname "${BARE_DIR}")/uptempo-trees"
+  LOCK_DIR="${TREES_DIR}/.locks"
+  mkdir -p "${LOCK_DIR}"
+}
+
+# ── Lock 관리 ──────────────────────────────────────────
+lock_file() { echo "${LOCK_DIR}/${1}.lock"; }
+
+acquire_lock() {
+  local branch="$1" lf
+  lf="$(lock_file "$branch")"
+  if [[ -f "$lf" ]]; then
+    local owner
+    owner="$(cat "$lf")"
+    echo "❌ worktree '${branch}'는 이미 사용 중입니다 (PID: ${owner})" >&2
+    echo "   강제 해제하려면: rm ${lf}" >&2
+    return 1
+  fi
+  echo "$$" > "$lf"
+}
+
+release_lock() {
+  local branch="$1" lf
+  lf="$(lock_file "$branch")"
+  rm -f "$lf"
+}
+
+# ── 브랜치 이름 정규화 ─────────────────────────────────
+# feat/foo-bar → feat-foo-bar (디렉토리명용)
+sanitize() { echo "$1" | tr '/' '-'; }
+
+# ── 명령어 구현 ───────────────────────────────────────
+
+cmd_add() {
+  local branch="${1:?브랜치 이름을 지정하세요}"
+  local dir_name
+  dir_name="$(sanitize "$branch")"
+  local wt_path="${TREES_DIR}/${dir_name}"
+
+  if [[ -d "$wt_path" ]]; then
+    echo "❌ worktree가 이미 존재합니다: ${wt_path}" >&2
+    exit 1
+  fi
+
+  echo "▶ 브랜치 '${branch}' 생성 (base: main)..."
+  git -C "${BARE_DIR}" branch "$branch" main 2>/dev/null || true
+  git -C "${BARE_DIR}" worktree add "$wt_path" "$branch"
+  echo "✅ worktree 생성: ${wt_path}"
+}
+
+cmd_remove() {
+  local branch="${1:?브랜치 이름을 지정하세요}"
+  local dir_name
+  dir_name="$(sanitize "$branch")"
+  local wt_path="${TREES_DIR}/${dir_name}"
+
+  if [[ ! -d "$wt_path" ]]; then
+    echo "❌ worktree를 찾을 수 없습니다: ${wt_path}" >&2
+    exit 1
+  fi
+
+  # lock 확인
+  local lf
+  lf="$(lock_file "$dir_name")"
+  if [[ -f "$lf" ]]; then
+    echo "⚠️  에이전트가 실행 중입니다 (PID: $(cat "$lf")). 먼저 종료하세요." >&2
+    exit 1
+  fi
+
+  echo "▶ worktree 제거: ${dir_name}..."
+  git -C "${BARE_DIR}" worktree remove "$wt_path" --force
+  echo "✅ worktree 제거 완료: ${dir_name}"
+  echo "   브랜치 삭제하려면: git -C ${BARE_DIR} branch -d ${branch}"
+}
+
+cmd_list() {
+  echo "╔══════════════════════════════════════════════╗"
+  echo "║           Uptempo Worktree 현황              ║"
+  echo "╚══════════════════════════════════════════════╝"
+  echo ""
+
+  git -C "${BARE_DIR}" worktree list --porcelain | while IFS= read -r line; do
+    case "$line" in
+      "worktree "*)
+        wt_path="${line#worktree }"
+        ;;
+      "branch "*)
+        branch="${line#branch refs/heads/}"
+        dir_name="$(basename "$wt_path")"
+        lock_status="🔓 free"
+        if [[ -f "$(lock_file "$dir_name")" ]]; then
+          lock_status="🔒 agent PID $(cat "$(lock_file "$dir_name")")"
+        fi
+        printf "  %-24s %-20s %s\n" "$branch" "$dir_name/" "$lock_status"
+        ;;
+    esac
+  done
+  echo ""
+}
+
+cmd_launch() {
+  local branch="${1:?브랜치 이름을 지정하세요}"
+  local dir_name
+  dir_name="$(sanitize "$branch")"
+  local wt_path="${TREES_DIR}/${dir_name}"
+
+  if [[ ! -d "$wt_path" ]]; then
+    echo "❌ worktree를 먼저 생성하세요: wt add ${branch}" >&2
+    exit 1
+  fi
+
+  acquire_lock "$dir_name" || exit 1
+
+  local session_name="uptempo-${dir_name}"
+
+  # tmux 세션이 이미 있으면 attach
+  if tmux has-session -t "$session_name" 2>/dev/null; then
+    echo "▶ 기존 tmux 세션에 연결: ${session_name}"
+    release_lock "$dir_name"
+    tmux attach-session -t "$session_name"
+    return
+  fi
+
+  echo "▶ tmux 세션 시작: ${session_name}"
+  echo "  worktree: ${wt_path}"
+  echo "  branch: ${branch}"
+
+  # tmux 세션 생성 후 copilot 실행
+  tmux new-session -d -s "$session_name" -c "$wt_path" \
+    "echo '🚀 Uptempo Agent — branch: ${branch}' && echo '   worktree: ${wt_path}' && echo '' && copilot; bash scripts/wt _unlock ${dir_name}"
+
+  # 세션 종료 시 자동 lock 해제를 위한 hook
+  tmux set-option -t "$session_name" remain-on-exit off
+
+  echo "✅ 에이전트 실행 중"
+  echo ""
+  echo "  연결:  tmux attach -t ${session_name}"
+  echo "  종료:  tmux kill-session -t ${session_name}"
+}
+
+cmd_merge() {
+  local branch="${1:?브랜치 이름을 지정하세요}"
+  local int_path="${TREES_DIR}/integration"
+
+  if [[ ! -d "$int_path" ]]; then
+    echo "❌ integration worktree가 없습니다." >&2
+    exit 1
+  fi
+
+  echo "▶ integration에 '${branch}' 병합..."
+  cd "$int_path"
+  git merge "$branch" --no-ff -m "merge: ${branch} → integration"
+  echo "✅ 병합 완료"
+}
+
+cmd_sync() {
+  local int_branch="integration"
+  echo "▶ integration 기준으로 feature worktree들에 rebase..."
+
+  git -C "${BARE_DIR}" worktree list --porcelain | while IFS= read -r line; do
+    case "$line" in
+      "worktree "*)
+        wt_path="${line#worktree }"
+        ;;
+      "branch "*)
+        branch="${line#branch refs/heads/}"
+        if [[ "$branch" != "main" && "$branch" != "integration" ]]; then
+          dir_name="$(basename "$wt_path")"
+          if [[ -f "$(lock_file "$dir_name")" ]]; then
+            echo "  ⏭ ${branch} — 에이전트 실행 중, 건너뜀"
+          else
+            echo "  ▶ ${branch} — rebase on ${int_branch}..."
+            (cd "$wt_path" && git rebase "$int_branch") || \
+              echo "  ⚠️ ${branch} rebase 충돌. 수동 해결 필요."
+          fi
+        fi
+        ;;
+    esac
+  done
+  echo "✅ sync 완료"
+}
+
+cmd_unlock() {
+  local dir_name="${1:?}"
+  release_lock "$dir_name"
+}
+
+# ── 메인 ─────────────────────────────────────────────
+
+resolve_paths
+
+case "${1:-help}" in
+  add)      shift; cmd_add "$@" ;;
+  remove)   shift; cmd_remove "$@" ;;
+  list)     cmd_list ;;
+  launch)   shift; cmd_launch "$@" ;;
+  merge)    shift; cmd_merge "$@" ;;
+  sync)     cmd_sync ;;
+  _unlock)  shift; cmd_unlock "$@" ;;
+  *)
+    echo "사용법: wt <command> [args]"
+    echo ""
+    echo "명령어:"
+    echo "  add <branch>       새 worktree + 브랜치 생성"
+    echo "  remove <branch>    worktree 정리 및 회수"
+    echo "  list               모든 worktree 상태 표시"
+    echo "  launch <branch>    tmux + Copilot CLI 실행"
+    echo "  merge <branch>     integration에 병합"
+    echo "  sync               integration → feature worktree rebase"
+    ;;
+esac
