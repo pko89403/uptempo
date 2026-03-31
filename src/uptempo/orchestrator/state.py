@@ -42,6 +42,10 @@ class ClaimStateMachine:
         self._state = ClaimState.UNCLAIMED
 
     @property
+    def issue_id(self) -> str:
+        return self._issue_id
+
+    @property
     def state(self) -> ClaimState:
         return self._state
 
