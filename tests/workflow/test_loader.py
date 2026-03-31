@@ -26,8 +26,9 @@ VALID_WORKFLOW = dedent(
 
     workspace:
       root: "./workspaces"
-      hooks:
-        after_create: "scripts/hooks/after-create.sh"
+    hooks:
+      after_create: |
+        git clone git@github.com:your-org/your-repo.git .
     ---
 
     # Schema Generation Task
@@ -72,9 +73,8 @@ class TestLoad:
         assert result.config["tracker"]["team_key"] == "UPT"
         assert result.config["agent"]["model"] == "gpt-4o"
         assert result.config["agent"]["temperature"] == 0.2
-        assert (
-            result.config["workspace"]["hooks"]["after_create"] == "scripts/hooks/after-create.sh"
-        )
+        assert "workspace" in result.config
+        assert result.config["hooks"]["after_create"].startswith("git clone")
 
     def test_load_file_not_found(self, loader: WorkflowLoader, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):

@@ -55,6 +55,16 @@ class Config(BaseModel):
         Resolves ``$ENV`` references against ``os.environ`` before validation.
         """
         resolved = cls._resolve_env(raw)
+        hooks = resolved.get("hooks")
+        if isinstance(hooks, dict):
+            workspace = resolved.get("workspace")
+            merged_workspace = dict(workspace) if isinstance(workspace, dict) else {}
+
+            workspace_hooks = merged_workspace.get("hooks")
+            merged_hooks = dict(workspace_hooks) if isinstance(workspace_hooks, dict) else {}
+            merged_hooks.update(hooks)
+            merged_workspace["hooks"] = merged_hooks
+            resolved["workspace"] = merged_workspace
         return cls(**resolved)
 
     @staticmethod

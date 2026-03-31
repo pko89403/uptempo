@@ -19,9 +19,13 @@ tracker:
 
 workspace:
   root: "./workspaces"
-  hooks:
-    after_create: "scripts/hooks/after-create.sh"
-    before_run: "scripts/hooks/before-run.sh"
+
+hooks:
+  after_create: |
+    # Symphony-style default: keep the workspace boot hook inline.
+    true
+  before_run: |
+    true
 ---
 
 # Schema Generation Task

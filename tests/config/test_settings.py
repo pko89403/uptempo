@@ -97,6 +97,24 @@ class TestFromFrontmatter:
         assert cfg.workspace.root == Path("./workspaces")
         assert cfg.workspace.hooks == {"pre_push": "scripts/lint.sh"}
 
+    def test_from_frontmatter_merges_top_level_hooks_into_workspace_hooks(self):
+        raw = {
+            "tracker": {"team_key": "UPT"},
+            "workspace": {"root": "./workspaces"},
+            "hooks": {
+                "after_create": "git clone .",
+                "before_run": "mise exec -- true",
+            },
+        }
+
+        cfg = Config.from_frontmatter(raw)
+
+        assert cfg.workspace.root == Path("./workspaces")
+        assert cfg.workspace.hooks == {
+            "after_create": "git clone .",
+            "before_run": "mise exec -- true",
+        }
+
     def test_from_frontmatter_missing_required(self):
         with pytest.raises(ValidationError):
             Config.from_frontmatter({})
