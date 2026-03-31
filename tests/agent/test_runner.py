@@ -89,10 +89,10 @@ class FakeTransport:
         self.closed = True
 
 
-def make_config(*, codex_cmd: str = "codex --flag") -> Config:
+def make_config(*, codex_cmd: str = "codex --flag", turn_timeout_ms: int = 300_000) -> Config:
     return Config(
         tracker=TrackerConfig(team_key="UPT"),
-        agent=AgentConfig(codex_cmd=codex_cmd),
+        agent=AgentConfig(codex_cmd=codex_cmd, turn_timeout_ms=turn_timeout_ms),
         workspace=WorkspaceConfig(root=Path("workspaces")),
     )
 
@@ -234,3 +234,18 @@ async def test_run_turn_failure_returns_unsuccessful_result() -> None:
     assert result.output == "partial"
     assert result.error == "model_error"
     assert transport.sent == [("turn/start", {"thread_id": "thread-2"}, True)]
+
+
+class HangingTransport(FakeTransport):
+    async def receive(self) -> dict[str, Any]:
+        await asyncio.sleep(3600)
+        raise AssertionError("unreachable")
+
+
+@pytest.mark.asyncio
+async def test_run_turn_raises_on_timeout() -> None:
+    runner = AgentRunner(make_config(turn_timeout_ms=1))
+    transport = HangingTransport([])
+
+    with pytest.raises(RuntimeError, match="exceeded timeout"):
+        await runner._run_turn(transport, "thread-timeout", "Prompt")  # type: ignore[arg-type]

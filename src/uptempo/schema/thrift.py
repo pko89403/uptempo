@@ -35,7 +35,7 @@ class ThriftGenerator(SchemaGenerator):
         response_name = f"{entity_name}Response"
         service_name = f"{entity_name}Service"
         file_path = output_dir / f"{stem}.thrift"
-        summary = issue_summary(issue)
+        summary = _escape_thrift_string(issue_summary(issue))
 
         contents = "\n".join(
             [
@@ -87,7 +87,19 @@ class ThriftGenerator(SchemaGenerator):
             if not re.search(r"^service\s+\w+\s*\{", contents, flags=re.MULTILINE):
                 errors.append(f"{file_path}: missing service definition")
 
+            summary_match = re.search(
+                r'^\s*\d+:\s+string\s+summary\s+=\s+"(?:[^"\\]|\\.)*"$',
+                contents,
+                flags=re.MULTILINE,
+            )
+            if summary_match is None:
+                errors.append(f"{file_path}: invalid Thrift string literal for summary")
+
             if contents.count("{") != contents.count("}"):
                 errors.append(f"{file_path}: unbalanced braces")
 
         return errors
+
+
+def _escape_thrift_string(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')

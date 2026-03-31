@@ -94,6 +94,24 @@ class AgentRunner:
         prompt: str | None,
     ) -> AgentResult:
         """Send ``turn/start``, stream events, return on completion or failure."""
+        timeout_seconds = self._config.agent.turn_timeout_ms / 1000
+        try:
+            return await asyncio.wait_for(
+                self._run_turn_impl(transport, thread_id, prompt),
+                timeout=timeout_seconds,
+            )
+        except TimeoutError as exc:
+            raise RuntimeError(
+                f"Agent turn exceeded timeout of {self._config.agent.turn_timeout_ms} ms"
+            ) from exc
+
+    async def _run_turn_impl(
+        self,
+        transport: _JsonRpcTransport,
+        thread_id: str,
+        prompt: str | None,
+    ) -> AgentResult:
+        """Internal turn loop without timeout handling."""
         params: dict[str, Any] = {"thread_id": thread_id}
         if prompt is not None:
             params["prompt"] = prompt

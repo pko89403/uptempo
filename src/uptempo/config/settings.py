@@ -32,6 +32,7 @@ class AgentConfig(BaseModel):
     temperature: float = 0.0
     max_concurrency: int = 1
     max_retry_backoff_ms: int = 60_000
+    turn_timeout_ms: int = 300_000
     codex_cmd: str = "codex"
 
 

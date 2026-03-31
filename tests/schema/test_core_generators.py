@@ -127,6 +127,24 @@ def test_thrift_validate_rejects_invalid_files(tmp_workspace: Path) -> None:
     assert any("file does not exist" in error for error in errors)
 
 
+def test_thrift_generate_escapes_quotes_in_summary(tmp_workspace: Path) -> None:
+    generator = ThriftGenerator()
+    issue = Issue(
+        id="issue-quote",
+        identifier="UP-8",
+        title='API endpoint for "user" resources',
+        description='Expose "user" summary fields.',
+        state="Todo",
+        labels=[],
+    )
+
+    [file_path] = generator.generate(issue, tmp_workspace)
+    contents = file_path.read_text()
+
+    assert '\\"user\\"' in contents
+    assert generator.validate([file_path]) == []
+
+
 def test_websocket_generate_and_validate(tmp_workspace: Path) -> None:
     generator = WebSocketGenerator()
     issue = _sample_issue()
