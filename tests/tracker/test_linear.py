@@ -168,7 +168,7 @@ class TestLinearClient:
         await client.update_issue_state("issue-1", "state-1")
 
         assert captured["url"] == LINEAR_GRAPHQL_URL
-        assert captured["headers"]["Authorization"] == "Bearer linear-token"
+        assert captured["headers"]["Authorization"] == "linear-token"
         assert captured["json"] == {
             "query": UPDATE_ISSUE_STATE_MUTATION,
             "variables": {"issueId": "issue-1", "stateId": "state-1"},
@@ -195,11 +195,34 @@ class TestLinearClient:
         await client.add_comment("issue-1", "Ship it")
 
         assert captured["url"] == LINEAR_GRAPHQL_URL
-        assert captured["headers"]["Authorization"] == "Bearer linear-token"
+        assert captured["headers"]["Authorization"] == "linear-token"
         assert captured["json"] == {
             "query": ADD_COMMENT_MUTATION,
             "variables": {"issueId": "issue-1", "body": "Ship it"},
         }
+
+    async def test_execute_surfaces_http_error_body(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("LINEAR_API_KEY", "linear-token")
+        client = LinearClient(make_config())
+        response = httpx.Response(
+            400,
+            request=httpx.Request("POST", LINEAR_GRAPHQL_URL),
+            text='{"errors":[{"message":"Invalid input"}]}',
+        )
+
+        monkeypatch.setattr(
+            "uptempo.tracker.linear.httpx.AsyncClient",
+            lambda: MockAsyncClient(response=response, captured={}),
+        )
+
+        with pytest.raises(
+            LinearAPIError,
+            match=r"HTTP 400: .*Invalid input",
+        ):
+            await client._execute("query Example { viewer { id } }")
 
     async def test_execute_raises_for_graphql_errors(
         self,

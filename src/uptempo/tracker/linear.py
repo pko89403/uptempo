@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 LINEAR_GRAPHQL_URL = "https://api.linear.app/graphql"
+MAX_ERROR_BODY_CHARS = 500
 
 FETCH_ISSUES_QUERY = """
 query FetchIssues($teamKey: String!) {
@@ -134,21 +135,34 @@ class LinearClient:
         """Send a GraphQL request and return the JSON response body."""
         payload = {"query": query, "variables": variables or {}}
         headers = {
-            "Authorization": f"Bearer {self._api_key}",
+            "Authorization": self._api_key,
             "Content-Type": "application/json",
         }
 
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                LINEAR_GRAPHQL_URL,
+                json=payload,
+                headers=headers,
+            )
+
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    LINEAR_GRAPHQL_URL,
-                    json=payload,
-                    headers=headers,
-                )
-                response.raise_for_status()
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            response_text = response.text.strip()
+            body_preview = response_text[:MAX_ERROR_BODY_CHARS]
+            logger.exception(
+                "linear_request_failed",
+                status_code=response.status_code,
+                response_body=body_preview,
+            )
+            raise LinearAPIError(
+                f"Linear API request failed with HTTP {response.status_code}: "
+                f"{body_preview or 'empty response body'}"
+            ) from exc
         except httpx.HTTPError as exc:
             logger.exception("linear_request_failed")
-            raise LinearAPIError("Linear API request failed") from exc
+            raise LinearAPIError("Linear API request failed before receiving a response") from exc
 
         body = response.json()
         if not isinstance(body, dict):
