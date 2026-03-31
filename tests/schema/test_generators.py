@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import importlib
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from uptempo.schema.base import SchemaGenerator
 from uptempo.tracker.models import Issue, Label
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 GENERATORS = [
     ("uptempo.schema.openapi", "OpenApiGenerator"),
