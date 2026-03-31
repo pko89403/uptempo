@@ -47,6 +47,13 @@ async def run_poll_loop(config: Config) -> None:
     workflow_renderer = WorkflowRenderer()
     retry_attempt = 0
 
+    logger.info(
+        "poll_loop_started",
+        team_key=config.tracker.team_key,
+        poll_interval_ms=config.tracker.poll_interval_ms,
+        eligible_states=config.tracker.eligible_states,
+    )
+
     while True:
         try:
             await _poll_tick(
@@ -81,9 +88,13 @@ async def _poll_tick(
 ) -> None:
     """Execute a single poll-dispatch-run cycle."""
     issues = await tracker.fetch_issues()
+    logger.debug("poll_tick_fetched_issues", issue_count=len(issues))
     claims = await dispatcher.dispatch(issues)
     if not claims:
+        logger.debug("poll_tick_idle", issue_count=len(issues))
         return
+
+    logger.info("poll_tick_claimed_issues", claim_count=len(claims))
 
     workflow_definition = workflow_loader.load(_resolve_workflow_path(config))
     issues_by_id = {issue.id: issue for issue in issues}
