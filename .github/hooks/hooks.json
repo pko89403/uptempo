@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "tools": ["file_write", "bash"],
+        "script": ".github/hooks/secrets-guard/secrets-guard.sh"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "tools": ["file_write"],
+        "script": ".github/hooks/schema-lint/schema-lint.sh"
+      },
+      {
+        "tools": ["file_write"],
+        "script": ".github/hooks/auto-format/auto-format.sh"
+      }
+    ],
+    "sessionStart": [
+      {
+        "script": ".github/hooks/session-context/session-context.sh"
+      }
+    ]
+  }
+}

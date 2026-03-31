@@ -1,0 +1,9 @@
+{
+  "hooks": [
+    {
+      "event": "PostToolUse",
+      "tools": ["file_write"],
+      "script": ".github/hooks/auto-format/auto-format.sh"
+    }
+  ]
+}

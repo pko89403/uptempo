@@ -134,6 +134,27 @@ stdio를 통한 줄 단위 JSON-RPC 통신:
 
 연속 턴은 동일 `thread_id`를 재사용하며, 최초 태스크 프롬프트를 재전송하지 않습니다.
 
+### 9-프로토콜 하니스 아키텍처
+
+- **패턴**: Expert Pool + Producer-Reviewer 복합 구조
+- **9 에이전트**:
+
+| 에이전트 | 역할 |
+|----------|------|
+| `api-architect` | REST/OpenAPI 스키마 설계 |
+| `realtime-engineer` | WebSocket/SSE 실시간 프로토콜 |
+| `grpc-engineer` | gRPC/Protobuf 스키마 설계 |
+| `graphql-architect` | GraphQL SDL 스키마 설계 |
+| `event-engineer` | Kafka/RabbitMQ/NATS 이벤트 스키마 |
+| `integration-engineer` | Webhook/MQTT 통합 프로토콜 |
+| `trpc-engineer` | tRPC 라우터 + Zod 스키마 |
+| `schema-reviewer` | 크로스 프로토콜 검증 |
+| `orchestrator` | 이슈 분석 → 에이전트 위임 → 결과 통합 |
+
+- **정의 파일**: 에이전트 정의는 `.github/agents/`, 스킬은 `.github/skills/`에 배치합니다.
+- **실행 모델**: orchestrator가 이슈를 분석 → 프로토콜 에이전트에 병렬 위임 → schema-reviewer가 크로스 검증을 수행합니다.
+- **Copilot CLI 적응**: Claude Code의 `TeamCreate`/`SendMessage` 대신 `task` 도구(background 모드)를 사용하여 에이전트를 병렬 실행합니다.
+
 ## 빌드, 테스트, 린트
 
 ```bash
@@ -178,6 +199,18 @@ streamlit run demo/app.py --server.port 8501  # Streamlit 데모 페이지
 - **Thrift**: `.thrift` IDL 생성. `thrift/`에 배치.
 - **WebSocket**: AsyncAPI 3.0 YAML 또는 JSON Schema 생성. `websocket/`에 배치.
 - 모든 스키마 파일에 Linear 이슈 식별자를 참조하는 헤더 주석을 포함합니다.
+- **SSE**: OpenAPI 3.1에 `text/event-stream` 미디어 타입을 사용합니다. `sse/`에 배치.
+  EventSource 호환 이벤트 스키마를 정의합니다.
+- **GraphQL**: SDL(Schema Definition Language) 형식으로 생성합니다. `graphql/`에 배치.
+  페이지네이션은 Relay connection spec을 따릅니다. `graphql-js validate`로 검증합니다.
+- **Kafka/RabbitMQ/NATS**: AsyncAPI 3.0에 브로커별 바인딩을 포함합니다. `events/`에 배치.
+  CloudEvents 엔벨로프를 사용합니다. `asyncapi validate`로 검증합니다.
+- **Webhook**: OpenAPI 3.1 Callbacks + JSON Schema 페이로드로 생성합니다. `webhook/`에 배치.
+  HMAC 서명 검증 스키마를 반드시 포함합니다.
+- **MQTT**: AsyncAPI 3.0 MQTT 바인딩으로 생성합니다. `mqtt/`에 배치.
+  QoS 레벨 어노테이션을 반드시 명시합니다. `asyncapi validate`로 검증합니다.
+- **tRPC**: TypeScript 라우터 + Zod 스키마로 생성합니다. `trpc/`에 배치.
+  `tsc --noEmit`으로 검증합니다.
 - 커밋 전 생성된 스키마를 검증합니다 (proto는 `buf lint`, OpenAPI는 `spectral` 등).
 
 ### Python 스타일
@@ -228,3 +261,24 @@ streamlit run demo/app.py --server.port 8501  # Streamlit 데모 페이지
 - 스키마 구조를 트리 뷰 또는 테이블로 시각화합니다.
 - FastAPI 백엔드 엔드포인트를 호출하여 실시간 응답을 보여주는 인터랙티브 테스트 패널을 포함합니다.
 - `requests` 또는 `httpx`로 FastAPI 백엔드와 통신합니다.
+
+### 크로스 프로토콜 일관성 규칙
+
+- 동일 엔티티는 프로토콜 간 동일한 필드명을 사용합니다 (컨벤션 변환 허용:
+  JSON은 camelCase, Proto는 snake_case, TypeScript는 PascalCase).
+- 에러 코드를 프로토콜 간 매핑합니다: HTTP status ↔ gRPC status ↔ GraphQL error
+  extension code ↔ `TRPCError` code.
+- 인증 스킴은 모든 프로토콜에 일관되게 적용합니다 (JWT Bearer, API Key 등).
+- 이벤트 페이로드(Kafka/MQTT/Webhook)는 동일 엔티티에 대한 REST 응답 스키마와
+  필드 구조가 일치해야 합니다.
+
+### 에이전트 협업 프로토콜
+
+- **워크스페이스 디렉토리 구조**: 각 에이전트는 `{workspace}/{protocol}/` 하위에서 작업합니다.
+- **파일 기반 데이터 전달**: Copilot CLI에서는 에이전트 간 직접 메시징이 불가하므로,
+  파일 시스템을 통해 데이터를 주고받습니다.
+- **schema-reviewer**: 모든 프로토콜 디렉토리(`openapi/`, `proto/`, `graphql/`, `events/` 등)를
+  읽어 크로스 프로토콜 일관성을 검증합니다.
+- **orchestrator 산출물**:
+  - `{workspace}/00_analysis.md` — 이슈 분석 결과 및 에이전트 위임 계획.
+  - `{workspace}/_review/review_report.md` — schema-reviewer의 최종 검증 리포트.

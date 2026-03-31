@@ -45,8 +45,25 @@ and produce the requested schema files.
    - gRPC → `proto/` (proto3 .proto)
    - Thrift → `thrift/` (.thrift IDL)
    - WebSocket → `websocket/` (AsyncAPI 3.0 YAML)
+   - SSE → `sse/` (OpenAPI 3.1 YAML with text/event-stream)
+   - GraphQL → `graphql/` (GraphQL SDL .graphql)
+   - Kafka/RabbitMQ/NATS → `events/` (AsyncAPI 3.0 YAML + Avro/JSON Schema)
+   - Webhook → `webhook/` (OpenAPI 3.1 Callbacks + JSON Schema)
+   - MQTT → `mqtt/` (AsyncAPI 3.0 MQTT binding)
+   - tRPC → `trpc/` (tRPC Router + Zod schema, TypeScript)
 3. Include a header comment referencing `{{ issue.identifier }}`.
 4. Validate the generated schema before committing.
+
+## Agent Team
+
+For complex issues requiring multiple protocols, the orchestrator will:
+1. Detect required protocols from issue keywords and labels.
+2. Delegate to specialized agents in parallel (up to {{ agent.max_concurrency }}).
+3. Cross-validate generated schemas via schema-reviewer.
+4. Consolidate results and update issue status.
+
+Available agents: api-architect, realtime-engineer, grpc-engineer, graphql-architect,
+event-engineer, integration-engineer, trpc-engineer, schema-reviewer.
 
 {% if attempt %}
 ## Retry Context
