@@ -69,11 +69,17 @@ class WorkspaceManager:
             self._hooks[stage] = command
 
     async def create(self, issue_id: str) -> WorkspaceInfo:
-        """Create a workspace directory for *issue_id* and run ``after_create``."""
+        """Create or reopen a workspace for *issue_id*.
+
+        ``after_create`` runs only on first creation so persistent workspaces can
+        be reused across poll ticks without repeating bootstrap work.
+        """
         workspace_path = (self._root / issue_id).resolve()
         self._validate_path(workspace_path)
+        created = not workspace_path.exists()
         await asyncio.to_thread(workspace_path.mkdir, parents=True, exist_ok=True)
-        await self._run_hook(HookStage.AFTER_CREATE, workspace_path)
+        if created:
+            await self._run_hook(HookStage.AFTER_CREATE, workspace_path)
         return WorkspaceInfo(issue_id=issue_id, path=workspace_path)
 
     async def prepare(self, info: WorkspaceInfo) -> None:

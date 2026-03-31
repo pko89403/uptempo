@@ -118,7 +118,7 @@ class TestPollTick:
         tracker.add_comment.assert_not_awaited()
         workspace_mgr.prepare.assert_awaited_once()
         workspace_mgr.finalise.assert_awaited_once()
-        workspace_mgr.remove.assert_awaited_once()
+        workspace_mgr.remove.assert_not_awaited()
         assert dispatcher._claims == {}
         assert any(
             call.args == ("issue_execution_succeeded",)
@@ -167,7 +167,7 @@ class TestPollTick:
         tracker.update_issue_state.assert_not_awaited()
         tracker.add_comment.assert_not_awaited()
         workspace_mgr.finalise.assert_awaited_once()
-        workspace_mgr.remove.assert_awaited_once()
+        workspace_mgr.remove.assert_not_awaited()
         assert dispatcher._claims == {}
         assert any(
             call.args == ("issue_execution_unsuccessful",)

@@ -35,6 +35,31 @@ class TestWorkspaceManager:
 
         assert not info.path.exists()
 
+    async def test_create_reuses_existing_workspace_without_rerunning_after_create(
+        self, tmp_path: Path
+    ):
+        manager = _manager(
+            tmp_path,
+            hooks={
+                "after_create": _python_hook(
+                    "from pathlib import Path; "
+                    "count = Path('after-create-count.txt'); "
+                    "current = int(count.read_text()) if count.exists() else 0; "
+                    "count.write_text(str(current + 1))"
+                )
+            },
+        )
+
+        first = await manager.create("issue-5")
+        preserved_file = first.path / "notes.txt"
+        preserved_file.write_text("keep me", encoding="utf-8")
+
+        second = await manager.create("issue-5")
+
+        assert second == first
+        assert preserved_file.read_text(encoding="utf-8") == "keep me"
+        assert (second.path / "after-create-count.txt").read_text(encoding="utf-8") == "1"
+
     async def test_hooks_run_successfully(self, tmp_path: Path):
         manager = _manager(
             tmp_path,

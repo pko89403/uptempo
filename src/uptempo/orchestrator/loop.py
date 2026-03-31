@@ -194,14 +194,12 @@ async def _poll_tick(
                         await workspace_mgr.finalise(workspace)
                     except Exception:
                         logger.exception("workspace_finalise_failed", issue_id=issue.id)
-                try:
-                    await workspace_mgr.remove(workspace)
-                except Exception:
-                    logger.exception(
-                        "workspace_remove_failed",
-                        issue_id=issue.id,
-                        failure_reason=failure_reason,
-                    )
+                logger.debug(
+                    "workspace_retained",
+                    issue_id=issue.id,
+                    workspace=str(workspace.path),
+                    failure_reason=failure_reason,
+                )
             dispatcher.release(issue.id)
 
 
