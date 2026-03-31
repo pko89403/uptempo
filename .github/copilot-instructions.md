@@ -145,7 +145,8 @@ make all                    # 포맷 검사 + 린트 + 테스트 + 타입 검사
 
 # 개별 명령
 make fmt                    # 자동 포맷 (black + isort)
-make lint                   # ruff + mypy
+make lint                   # ruff
+make typecheck              # mypy
 make test                   # 전체 테스트 스위트
 pytest tests/test_foo.py    # 단일 테스트 파일
 pytest tests/test_foo.py::test_bar -v   # 단일 테스트 함수
