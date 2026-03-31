@@ -122,6 +122,25 @@ class TestWorkspaceManager:
 
         assert (info.path / "created.txt").read_text() == "ok"
 
+    async def test_multiline_hook_runs_as_inline_shell_script(self, tmp_path: Path):
+        marker = tmp_path / "#"
+        marker.write_text(
+            "#!/usr/bin/env bash\nset -euo pipefail\nprintf 'wrong' > created.txt\n",
+            encoding="utf-8",
+        )
+        marker.chmod(0o755)
+
+        manager = _manager(
+            tmp_path,
+            hooks={
+                "after_create": "# Symphony-style inline hook comment\nprintf 'ok' > created.txt\n"
+            },
+        )
+
+        info = await manager.create("issue-5")
+
+        assert (info.path / "created.txt").read_text() == "ok"
+
     async def test_finalise_and_remove_ignore_hook_failures(self, tmp_path: Path):
         manager = _manager(
             tmp_path,

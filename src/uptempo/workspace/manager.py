@@ -170,6 +170,9 @@ class WorkspaceManager:
         land inside the workspace. Only the executable path is rewritten when the
         first token points at a repo-relative script.
         """
+        if "\n" in command:
+            return command
+
         try:
             tokens = shlex.split(command)
         except ValueError:
