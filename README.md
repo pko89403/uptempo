@@ -1,11 +1,22 @@
 # Uptempo
 
-**Symphony 기반 코딩 에이전트** — Linear 이슈에서 네트워크 스키마 설계 요청을 받아
-REST/OpenAPI, gRPC/Protobuf, Thrift, WebSocket 스키마 파일을 자동 생성하고 PR을 올립니다.
+**Symphony에 영향을 받은 Uptempo orchestration runtime** — Linear 이슈를 읽고,
+가장 적합한 네트워크 인터페이스/프로토콜을 발굴한 뒤, 그 선택을 뒷받침하는
+스키마와 근거를 남기는 자동화 에이전트입니다.
+
+Uptempo의 핵심은 단순 생성이 아닙니다.
+
+- 어떤 인터페이스가 맞는지 **발굴**
+- plausible한 대안을 **비교**
+- 선택 이유를 **실험/검증으로 증명**
+- 결과를 스키마 산출물과 함께 **Linear workflow** 안에서 다루기
+
+즉, Uptempo는 "schema emitter"라기보다 **protocol discovery + schema execution**
+에 더 가깝습니다.
 
 ## 아키텍처
 
-```
+```text
 Linear (이슈 트래커)
   │
   ▼
@@ -17,47 +28,72 @@ Orchestrator (Python)         ← Linear 폴링, 동시성/재시도 관리
   └── AgentRunner             ← Codex app-server JSON-RPC
         │
         ▼
-Schema Generator              ← openapi, proto, thrift, websocket
+Protocol / Schema Execution   ← OpenAPI, gRPC, Thrift, WebSocket, GraphQL, events, etc.
 
 Demo Stack
-  ├── api/                    ← FastAPI (스키마 기반 stub API)
-  └── demo/                   ← Streamlit (시각화 + 테스트 UI)
+  ├── api/                    ← FastAPI
+  └── demo/                   ← Streamlit
 ```
 
 ## 빠른 시작
 
 ```bash
 # 의존성 설치
-pip install -e ".[dev]"
+uv sync --all-extras
 
 # 전체 품질 게이트
-make all          # fmt + lint + test + typecheck
+make all
 
-# 개별 명령
-make fmt          # black + isort
-make lint         # ruff
-make test         # pytest
-make typecheck    # mypy
-
-# 데모 서버
-uvicorn api.main:app --reload --port 8000
-streamlit run demo/app.py --server.port 8501
+# 오케스트레이터 실행
+uv run python -m uptempo
 ```
 
-## 개발 환경
+실행 전에는 최소한 다음이 준비되어 있어야 합니다.
 
-이 프로젝트는 **bare repo + worktree + tmux** 구조로 개발합니다.
+- `LINEAR_API_KEY`
+- 현재 프로젝트에 맞는 `WORKFLOW.md`
+- Codex 실행 환경
 
-```bash
-# worktree 관리
-bash scripts/wt add feat/my-feature
-bash scripts/wt list
-bash scripts/wt launch feat/my-feature
-bash scripts/wt merge feat/my-feature
-bash scripts/wt remove feat/my-feature
-```
+## 동작 방식
 
-자세한 내용은 [.github/copilot-instructions.md](.github/copilot-instructions.md)를 참고하세요.
+1. Uptempo가 Linear에서 활성 이슈를 폴링합니다.
+2. 이슈 설명과 맥락을 바탕으로 적합한 프로토콜/인터페이스 후보를 해석합니다.
+3. `WORKFLOW.md`의 운영 규칙에 따라 분석, 구현, 검증, PR 흐름을 진행합니다.
+4. 결과로 스키마 산출물과 검증 근거를 남깁니다.
+
+## 주요 산출물
+
+Uptempo는 필요에 따라 다음 디렉터리들에 산출물을 남깁니다.
+
+- `openapi/`
+- `proto/`
+- `thrift/`
+- `websocket/`
+- `sse/`
+- `graphql/`
+- `events/`
+- `webhook/`
+- `mqtt/`
+- `trpc/`
+
+## 워크플로우 기준
+
+운영 흐름은 OpenAI Symphony, 특히 `elixir/WORKFLOW.md`의 영향을 강하게 받습니다.
+다만 Uptempo는 여기에 다음을 추가합니다.
+
+- protocol discovery
+- alternative comparison
+- evidence / experiment reporting
+
+즉, **운영 discipline은 Symphony를 참고하고, 도메인 판단은 Uptempo에 맞게 확장**합니다.
+
+## 개발자 참고
+
+내부 harness, worktree 운영, Copilot/Codex skill surface 같은 개발자 전용 정보는
+사용자 README의 핵심이 아닙니다. 그런 내용은 아래 문서를 참고하세요.
+
+- Codex-local skill surface: [`.codex/`](.codex/)
+- 개발/운영 규칙: [`.github/copilot-instructions.md`](.github/copilot-instructions.md)
 
 ## 라이선스
 
