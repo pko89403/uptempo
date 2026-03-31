@@ -1,15 +1,38 @@
-# Uptempo Harness — 9-Protocol Schema Generation Team
+# Uptempo Harness — 개발 도구 가이드
 
-## Overview
+> ⚠️ **이 문서는 Uptempo 제품이 아닌 "개발 하네스"를 설명합니다.**
+> 제품 코드(`src/uptempo/`)의 아키텍처는 → [`copilot-instructions.md`](copilot-instructions.md)
 
-Uptempo uses a **9-agent, 10-skill harness** to generate multi-protocol network
-schemas from Linear issues. The orchestrator analyzes an issue, detects which
-protocols are needed, delegates to specialized agents in parallel, runs
-cross-validation, and finalizes the output — all within the Copilot CLI
-environment.
+## 목차 — 필요한 것부터 찾아가세요
+
+| 뭘 하고 싶은가? | 섹션 |
+|----------------|------|
+| 처음 시작하기 | [Quick Start](#quick-start) |
+| 어떤 에이전트가 있는지 보기 | [Agent Roster](#agent-roster) |
+| 특정 프로토콜 스키마 생성하기 | [Protocol → Output Mapping](#protocol--output-mapping) |
+| 스킬 목록 보기 | [Skill Inventory](#skill-inventory) |
+| 전체 파이프라인 이해하기 | [Workflow Phases](#workflow-phases) |
+| 디렉토리 구조 이해하기 | [Directory Structure](#directory-structure) |
+| 훅/자동화 설정 보기 | [Hooks](#hooks) |
+| 코딩 규칙 확인하기 | [Rules](#rules-path-specific) |
+| Copilot CLI 적응 방법 | [Copilot CLI Adaptation Notes](#copilot-cli-adaptation-notes) |
+
+---
+
+## Product vs. Harness 경계
 
 ```
-Linear Issue → Orchestrator → Protocol Agents (parallel) → Schema Reviewer → Commit
+┌─ Product (src/uptempo/) ──────────────┐   ┌─ Harness (.github/) ─────────────┐
+│                                        │   │                                   │
+│  schema/      10개 스키마 제너레이터     │   │  agents/     9개 에이전트 페르소나  │
+│  config/      설정 로딩                 │   │  skills/     10개 스킬 프롬프트    │
+│  tracker/     Linear API 연동           │   │  hooks/      라이프사이클 자동화   │
+│  workspace/   워크스페이스 관리          │   │  workflows/  슬래시 커맨드 파이프라인│
+│  orchestrator/ 폴 루프 + 상태 머신      │   │  rules/      경로별 코딩 규칙     │
+│  agent/       Codex 에이전트 실행       │   │  harness/    리뷰어 + 프로토콜 라우팅│
+│                                        │   │                                   │
+│  → 사용자에게 배포되는 코드              │   │  → Copilot CLI로 개발할 때 사용    │
+└────────────────────────────────────────┘   └───────────────────────────────────┘
 ```
 
 ## Architecture
@@ -135,19 +158,21 @@ Rules auto-load when editing files matching their `paths` globs.
 
 ```
 .github/
-├── copilot-instructions.md          # Global Copilot CLI instructions
-├── HARNESS.md                       # ← This file
-├── agents/                          # WHO — agent personas (9 agents)
-│   ├── orchestrator.md              # Meta-agent: workflow coordinator
-│   ├── api-architect.md             # REST / OpenAPI
-│   ├── realtime-engineer.md         # SSE + WebSocket
-│   ├── grpc-engineer.md             # gRPC / Protobuf
-│   ├── graphql-architect.md         # GraphQL SDL
-│   ├── event-engineer.md            # Kafka / RabbitMQ / NATS
-│   ├── integration-engineer.md      # Webhook + MQTT
-│   ├── trpc-engineer.md             # tRPC / Zod
-│   └── schema-reviewer.md          # Cross-protocol QA (read-only)
-├── skills/                          # HOW — step-by-step procedures (10 skills)
+├── copilot-instructions.md          # 제품 아키텍처 (→ src/uptempo/)
+├── HARNESS.md                       # ← 이 파일 (개발 하네스 가이드)
+│
+├── agents/                          # WHO — 에이전트 페르소나 (9개)
+│   ├── orchestrator.md
+│   ├── api-architect.md
+│   ├── realtime-engineer.md
+│   ├── grpc-engineer.md
+│   ├── graphql-architect.md
+│   ├── event-engineer.md
+│   ├── integration-engineer.md
+│   ├── trpc-engineer.md
+│   └── schema-reviewer.md
+│
+├── skills/                          # HOW — 스킬 절차서 (10개)
 │   ├── schema-orchestrator/SKILL.md
 │   ├── generate-openapi/SKILL.md
 │   ├── generate-sse/SKILL.md
@@ -158,21 +183,35 @@ Rules auto-load when editing files matching their `paths` globs.
 │   ├── generate-webhook/SKILL.md
 │   ├── generate-mqtt/SKILL.md
 │   └── generate-trpc/SKILL.md
-├── hooks/                           # WHEN — lifecycle event automation
-│   ├── hooks.json                   # Root aggregator (all events)
-│   ├── secrets-guard/               # PreToolUse: block secret leaks (exit 2)
-│   ├── schema-lint/                 # PostToolUse: validate schema files
-│   ├── auto-format/                 # PostToolUse: black/isort/buf/prettier
-│   └── session-context/             # sessionStart: show worktree + coverage
-├── workflows/                       # WHAT — agentic pipeline definitions
-│   ├── generate-schema.md           # /generate-schema — full pipeline
-│   ├── review-schemas.md            # /review-schemas — cross-protocol audit
-│   └── detect-protocol.md           # /detect-protocol — quick analysis
-└── rules/                           # WHERE — path-specific coding rules
-    ├── schema-generators.md         # src/uptempo/schema/**/*.py
-    ├── proto-files.md               # **/*.proto
-    ├── test-files.md                # tests/**/*.py
-    └── harness-files.md             # .github/{agents,skills,hooks,workflows}/**
+│
+├── hooks/                           # WHEN — 라이프사이클 자동화
+│   ├── hooks.json
+│   ├── secrets-guard/
+│   ├── schema-lint/
+│   ├── auto-format/
+│   └── session-context/
+│
+├── workflows/                       # WHAT — 슬래시 커맨드 파이프라인
+│   ├── generate-schema.md
+│   ├── review-schemas.md
+│   └── detect-protocol.md
+│
+├── rules/                           # WHERE — 경로별 코딩 규칙
+│   ├── schema-generators.md
+│   ├── proto-files.md
+│   ├── test-files.md
+│   └── harness-files.md
+│
+└── harness/                         # 하네스 전용 코드 + 테스트
+    ├── reviewer/                    # 크로스 프로토콜 리뷰 로직
+    │   ├── checker.py
+    │   └── models.py
+    ├── protocol-routing/            # 이슈 → 에이전트 라우팅
+    │   └── protocol_detector.py
+    └── tests/                       # 하네스 테스트
+        ├── test_checker.py
+        ├── test_models.py
+        └── test_protocol_detector.py
 ```
 
 ### Folder Interaction Model
