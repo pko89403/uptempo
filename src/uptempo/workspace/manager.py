@@ -12,14 +12,13 @@ All workspace paths are validated to reside under the configured root.
 from __future__ import annotations
 
 from enum import Enum, auto
+from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING
 
 import structlog
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from uptempo.config.settings import Config
 
 logger = structlog.get_logger(__name__)
