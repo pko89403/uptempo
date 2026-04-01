@@ -59,7 +59,11 @@ class WorkspaceManager:
 
     def __init__(self, config: Config) -> None:
         self._root = config.workspace.root.resolve()
-        self._project_root = self._root.parent
+        self._project_root = (
+            config.workspace.project_root.resolve()
+            if config.workspace.project_root is not None
+            else self._root.parent
+        )
         self._hooks = {}
         for name, command in config.workspace.hooks.items():
             stage = self._HOOK_STAGE_MAP.get(name)

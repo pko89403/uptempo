@@ -44,3 +44,4 @@ async def test_run_loads_workflow_from_explicit_override(
     assert config.tracker.team_key == "UPT"
     assert config.tracker.poll_interval_ms == 12_000
     assert config.agent.codex_cmd == "codex --profile local"
+    assert config.workspace.project_root == workflow_path.parent.resolve()
