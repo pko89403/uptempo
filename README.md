@@ -54,7 +54,11 @@ uv run python -m uptempo
 - `LINEAR_API_KEY`
 - 내장 기본 워크플로우 `src/uptempo/runtime_assets/WORKFLOW.md`
 - 필요 시 `UPTEMPO_WORKFLOW_PATH`로 명시적 override
+- 필요 시 `UPTEMPO_WORKSPACE_SOURCE`로 워크스페이스 bootstrap source override
 - Codex 실행 환경
+
+기본 workspace bootstrap은 현재 Uptempo checkout을 명시적으로 clone합니다.
+다른 source를 쓰고 싶으면 `UPTEMPO_WORKSPACE_SOURCE`에 로컬 경로 또는 Git URL을 지정하세요.
 
 ## 동작 방식
 

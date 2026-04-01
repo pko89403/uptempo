@@ -19,7 +19,9 @@ workspace:
   root: ./workspaces
 hooks:
   after_create: |
-    git clone --depth 1 ../.. .
+    # Clone the current checkout by default.
+    # Set UPTEMPO_WORKSPACE_SOURCE to override with an explicit local path or Git URL.
+    scripts/bootstrap-workspace.sh
   before_remove: |
     # Uptempo workspaces are disposable local clones.
     true

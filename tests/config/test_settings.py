@@ -65,6 +65,24 @@ class TestFromFrontmatter:
         assert cfg.workspace.root == Path("/opt/workspaces")
         assert cfg.workspace.hooks == {"pre_push": "lint.sh", "post_merge": "deploy.sh"}
 
+    def test_from_frontmatter_injects_project_root_when_provided(self):
+        raw = {"tracker": {"team_key": "UPT"}, "workspace": {"root": "/opt/workspaces"}}
+
+        cfg = Config.from_frontmatter(raw, project_root=Path("/repo/root"))
+
+        assert cfg.workspace.root == Path("/opt/workspaces")
+        assert cfg.workspace.project_root == Path("/repo/root")
+
+    def test_from_frontmatter_prefers_explicit_workspace_project_root(self):
+        raw = {
+            "tracker": {"team_key": "UPT"},
+            "workspace": {"root": "/opt/workspaces", "project_root": "/workflow/root"},
+        }
+
+        cfg = Config.from_frontmatter(raw, project_root=Path("/repo/root"))
+
+        assert cfg.workspace.project_root == Path("/workflow/root")
+
     def test_from_frontmatter_with_workflow_md_data(self):
         raw = {
             "tracker": {

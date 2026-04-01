@@ -66,6 +66,11 @@ class TestLoad:
         assert isinstance(result, WorkflowDefinition)
         assert "workspace" in result.config
         assert "root" in result.config["workspace"]
+        assert result.config["hooks"]["after_create"] == (
+            "# Clone the current checkout by default.\n"
+            "# Set UPTEMPO_WORKSPACE_SOURCE to override with an explicit local path or Git URL.\n"
+            "scripts/bootstrap-workspace.sh\n"
+        )
 
     def test_load_valid_workflow(self, loader: WorkflowLoader, tmp_path: Path) -> None:
         wf_path = tmp_path / "WORKFLOW.md"

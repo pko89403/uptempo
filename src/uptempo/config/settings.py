@@ -38,6 +38,7 @@ class AgentConfig(BaseModel):
 
 class WorkspaceConfig(BaseModel):
     root: Path
+    project_root: Path | None = None
     hooks: dict[str, str] = Field(default_factory=dict)
 
 
@@ -49,7 +50,9 @@ class Config(BaseModel):
     workspace: WorkspaceConfig
 
     @classmethod
-    def from_frontmatter(cls, raw: dict[str, Any]) -> Config:
+    def from_frontmatter(
+        cls, raw: dict[str, Any], *, project_root: Path | None = None
+    ) -> Config:
         """Build a ``Config`` from the parsed YAML frontmatter dict.
 
         Resolves ``$ENV`` references against ``os.environ`` before validation.
@@ -65,6 +68,12 @@ class Config(BaseModel):
             merged_hooks = dict(workspace_hooks) if isinstance(workspace_hooks, dict) else {}
             merged_hooks.update(hooks)
             merged_workspace["hooks"] = merged_hooks
+            resolved["workspace"] = merged_workspace
+
+        if project_root is not None:
+            workspace = resolved.get("workspace")
+            merged_workspace = dict(workspace) if isinstance(workspace, dict) else {}
+            merged_workspace.setdefault("project_root", project_root)
             resolved["workspace"] = merged_workspace
         return cls(**resolved)
 

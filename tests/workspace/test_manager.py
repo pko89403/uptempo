@@ -10,10 +10,20 @@ from uptempo.config.settings import Config, TrackerConfig, WorkspaceConfig
 from uptempo.workspace.manager import WorkspaceHookError, WorkspaceInfo, WorkspaceManager
 
 
-def _manager(tmp_path: Path, hooks: dict[str, str] | None = None) -> WorkspaceManager:
+def _manager(
+    tmp_path: Path,
+    hooks: dict[str, str] | None = None,
+    *,
+    workspace_root: Path | None = None,
+    project_root: Path | None = None,
+) -> WorkspaceManager:
     config = Config(
         tracker=TrackerConfig(team_key="UPT"),
-        workspace=WorkspaceConfig(root=tmp_path / "workspaces", hooks=hooks or {}),
+        workspace=WorkspaceConfig(
+            root=workspace_root or (tmp_path / "workspaces"),
+            project_root=project_root,
+            hooks=hooks or {},
+        ),
     )
     return WorkspaceManager(config)
 
@@ -117,6 +127,31 @@ class TestWorkspaceManager:
         script_path.chmod(0o755)
 
         manager = _manager(tmp_path, hooks={"after_create": "repo-hooks/after-create.sh"})
+
+        info = await manager.create("issue-5")
+
+        assert (info.path / "created.txt").read_text() == "ok"
+
+    async def test_relative_script_hook_uses_explicit_project_root_for_absolute_workspace_root(
+        self, tmp_path: Path
+    ):
+        project_root = tmp_path / "repo"
+        workspace_root = tmp_path / "external-workspaces"
+        script_path = project_root / "repo-hooks" / "after-create.sh"
+        script_path.parent.mkdir(parents=True)
+        workspace_root.mkdir(parents=True)
+        script_path.write_text(
+            "#!/usr/bin/env bash\nset -euo pipefail\nprintf 'ok' > created.txt\n",
+            encoding="utf-8",
+        )
+        script_path.chmod(0o755)
+
+        manager = _manager(
+            tmp_path,
+            hooks={"after_create": "repo-hooks/after-create.sh"},
+            workspace_root=workspace_root,
+            project_root=project_root,
+        )
 
         info = await manager.create("issue-5")
 
