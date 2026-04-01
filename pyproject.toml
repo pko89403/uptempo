@@ -39,7 +39,7 @@ packages = ["src/uptempo"]
 # ── Ruff ─────────────────────────────────────────────────────────────
 [tool.ruff]
 target-version = "py311"
-src = ["src", "api", "demo", "tests"]
+src = ["src", "tests"]
 line-length = 99
 
 [tool.ruff.lint]
@@ -70,7 +70,7 @@ line-length = 99
 profile = "black"
 line_length = 99
 known_first_party = ["uptempo"]
-src_paths = ["src", "api", "demo", "tests"]
+src_paths = ["src", "tests"]
 
 # ── mypy ─────────────────────────────────────────────────────────────
 [tool.mypy]

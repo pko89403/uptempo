@@ -1,4 +1,4 @@
-"""Uptempo Streamlit demo — interactive schema explorer."""
+"""Uptempo Streamlit UI — built-in runtime companion module."""
 
 from __future__ import annotations
 

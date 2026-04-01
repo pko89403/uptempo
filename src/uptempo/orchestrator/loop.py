@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import structlog
@@ -28,6 +27,7 @@ from uptempo.orchestrator.state import ClaimState
 from uptempo.tracker.linear import LinearClient
 from uptempo.workflow.loader import WorkflowLoader
 from uptempo.workflow.renderer import WorkflowRenderer
+from uptempo.workflow.runtime import load_active_workflow
 from uptempo.workspace.manager import WorkspaceManager
 
 if TYPE_CHECKING:
@@ -95,7 +95,7 @@ async def _poll_tick(
 
     logger.info("poll_tick_claimed_issues", claim_count=len(claims))
 
-    workflow_definition = workflow_loader.load(_resolve_workflow_path(config))
+    workflow_definition = load_active_workflow(workflow_loader)
     issues_by_id = {issue.id: issue for issue in issues}
     for claim in claims:
         issue = issues_by_id[claim.issue_id]
@@ -208,19 +208,5 @@ def _backoff_delay(attempt: int, max_ms: int) -> float:
     if attempt < 0:
         raise ValueError("attempt must be non-negative")
     return min(float(2**attempt), max_ms / 1000)
-
-
-def _resolve_workflow_path(config: Config) -> Path:
-    """Resolve WORKFLOW.md relative to cwd or the configured workspace root."""
-    candidates = [
-        Path.cwd() / "WORKFLOW.md",
-        config.workspace.root.resolve().parent / "WORKFLOW.md",
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    raise FileNotFoundError(candidates[0])
-
-
 def _duration_ms(started_at: float) -> int:
     return int((time.perf_counter() - started_at) * 1000)

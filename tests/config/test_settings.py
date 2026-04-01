@@ -10,7 +10,7 @@ from uptempo.config.settings import AgentConfig, Config, TrackerConfig, Workspac
 
 class TestFromFrontmatter:
     def test_from_frontmatter_minimal(self):
-        raw = {"tracker": {"team_key": "UPT"}}
+        raw = {"tracker": {"team_key": "UPT"}, "workspace": {"root": "./workspaces"}}
         cfg = Config.from_frontmatter(raw)
 
         assert cfg.tracker.team_key == "UPT"
@@ -21,7 +21,7 @@ class TestFromFrontmatter:
         assert cfg.tracker.done_state == "Done"
         assert cfg.tracker.error_state == "Cancelled"
         assert cfg.agent == AgentConfig()
-        assert cfg.workspace == WorkspaceConfig()
+        assert cfg.workspace == WorkspaceConfig(root=Path("./workspaces"))
 
     def test_from_frontmatter_full(self):
         raw = {
@@ -151,6 +151,7 @@ class TestFromFrontmatter:
                 "turn_timeout_ms": 90_000,
             },
             "codex": {"cmd": "codex --alias", "turn_timeout_ms": 120_000},
+            "workspace": {"root": "./workspaces"},
         }
 
         cfg = Config.from_frontmatter(raw)
@@ -236,6 +237,6 @@ class TestDefaults:
         assert tracker.done_state == "Done"
         assert tracker.error_state == "Cancelled"
 
-        ws = WorkspaceConfig()
-        assert ws.root == Path("workspaces")
+        ws = WorkspaceConfig(root=Path("./workspaces"))
+        assert ws.root == Path("./workspaces")
         assert ws.hooks == {}

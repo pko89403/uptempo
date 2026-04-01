@@ -13,6 +13,7 @@ from uptempo.orchestrator.loop import _backoff_delay, _poll_tick
 from uptempo.tracker.models import Issue, Label
 from uptempo.workflow.loader import WorkflowLoader
 from uptempo.workflow.renderer import WorkflowRenderer
+from uptempo.workflow.runtime import WORKFLOW_OVERRIDE_ENV
 from uptempo.workspace.manager import WorkspaceInfo
 
 if TYPE_CHECKING:
@@ -43,13 +44,16 @@ def make_issue() -> Issue:
     )
 
 
-def write_workflow(tmp_path: Path) -> None:
-    (tmp_path / "WORKFLOW.md").write_text(
+def write_workflow(tmp_path: Path) -> Path:
+    workflow_path = tmp_path / "WORKFLOW.md"
+    workflow_path.write_text(
         dedent(
             """\
             ---
             tracker:
               team_key: "UPT"
+            workspace:
+              root: "./workspaces"
             ---
 
             Issue {{ issue.identifier }}
@@ -58,6 +62,7 @@ def write_workflow(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
+    return workflow_path
 
 
 class TestBackoffDelay:
@@ -75,8 +80,7 @@ class TestPollTick:
     async def test_poll_tick_success_flow(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.chdir(tmp_path)
-        write_workflow(tmp_path)
+        monkeypatch.setenv(WORKFLOW_OVERRIDE_ENV, str(write_workflow(tmp_path)))
         config = make_config(tmp_path)
         dispatcher = Dispatcher(config)
         issue = make_issue()
@@ -131,8 +135,7 @@ class TestPollTick:
     async def test_poll_tick_failure_logs_and_releases_claim(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.chdir(tmp_path)
-        write_workflow(tmp_path)
+        monkeypatch.setenv(WORKFLOW_OVERRIDE_ENV, str(write_workflow(tmp_path)))
         config = make_config(tmp_path)
         dispatcher = Dispatcher(config)
         issue = make_issue()
@@ -179,8 +182,7 @@ class TestPollTick:
     async def test_poll_tick_workspace_failure_logs_and_releases_claim(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.chdir(tmp_path)
-        write_workflow(tmp_path)
+        monkeypatch.setenv(WORKFLOW_OVERRIDE_ENV, str(write_workflow(tmp_path)))
         config = make_config(tmp_path)
         dispatcher = Dispatcher(config)
         issue = make_issue()

@@ -20,19 +20,20 @@ Uptempo의 핵심은 단순 생성이 아닙니다.
 Linear (이슈 트래커)
   │
   ▼
-Orchestrator (Python)         ← Linear 폴링, 동시성/재시도 관리
-  ├── WorkflowLoader          ← WORKFLOW.md 파싱
-  ├── Config                  ← 타입 기반 설정
-  ├── Tracker                 ← Linear GraphQL 어댑터
-  ├── WorkspaceManager        ← 이슈별 워크스페이스 관리
-  └── AgentRunner             ← Codex app-server JSON-RPC
+Orchestrator (Python)           ← Linear 폴링, 동시성/재시도 관리
+  ├── WorkflowLoader            ← built-in WORKFLOW.md 파싱
+  ├── Config                    ← 타입 기반 설정
+  ├── Tracker                   ← Linear GraphQL 어댑터
+  ├── WorkspaceManager          ← 이슈별 워크스페이스 관리
+  ├── AgentRunner               ← Codex app-server JSON-RPC
+  └── runtime_assets/           ← 내장 workflow/codex/api/demo 자산
         │
         ▼
-Protocol / Schema Execution   ← OpenAPI, gRPC, Thrift, WebSocket, GraphQL, events, etc.
+Protocol / Schema Execution     ← OpenAPI, gRPC, Thrift, WebSocket, GraphQL, events, etc.
 
-Demo Stack
-  ├── api/                    ← FastAPI
-  └── demo/                   ← Streamlit
+Runtime Companion Modules
+  ├── src/uptempo/runtime_assets/api/   ← FastAPI
+  └── src/uptempo/runtime_assets/demo/  ← Streamlit
 ```
 
 ## 빠른 시작
@@ -51,14 +52,15 @@ uv run python -m uptempo
 실행 전에는 최소한 다음이 준비되어 있어야 합니다.
 
 - `LINEAR_API_KEY`
-- 현재 프로젝트에 맞는 `WORKFLOW.md`
+- 내장 기본 워크플로우 `src/uptempo/runtime_assets/WORKFLOW.md`
+- 필요 시 `UPTEMPO_WORKFLOW_PATH`로 명시적 override
 - Codex 실행 환경
 
 ## 동작 방식
 
 1. Uptempo가 Linear에서 활성 이슈를 폴링합니다.
 2. 이슈 설명과 맥락을 바탕으로 적합한 프로토콜/인터페이스 후보를 해석합니다.
-3. `WORKFLOW.md`의 운영 규칙에 따라 분석, 구현, 검증, PR 흐름을 진행합니다.
+3. 내장 `WORKFLOW.md`(또는 명시적 override)의 운영 규칙에 따라 분석, 구현, 검증, PR 흐름을 진행합니다.
 4. 결과로 스키마 산출물과 검증 근거를 남깁니다.
 
 ## 주요 산출물
@@ -92,7 +94,7 @@ Uptempo는 필요에 따라 다음 디렉터리들에 산출물을 남깁니다.
 내부 harness, worktree 운영, Copilot/Codex skill surface 같은 개발자 전용 정보는
 사용자 README의 핵심이 아닙니다. 그런 내용은 아래 문서를 참고하세요.
 
-- Codex-local skill surface: [`.codex/`](.codex/)
+- Runtime Codex asset surface: [`src/uptempo/runtime_assets/codex/`](src/uptempo/runtime_assets/codex/)
 - 개발/운영 규칙: [`.github/copilot-instructions.md`](.github/copilot-instructions.md)
 
 ## 라이선스

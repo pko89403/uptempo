@@ -22,6 +22,7 @@ from uptempo.tracker.linear import (
 from uptempo.tracker.models import Issue, Label
 from uptempo.workflow.loader import WorkflowLoader
 from uptempo.workflow.renderer import WorkflowRenderer
+from uptempo.workflow.runtime import WORKFLOW_OVERRIDE_ENV
 from uptempo.workspace.manager import WorkspaceInfo
 
 
@@ -31,7 +32,8 @@ def make_config(*, team_key: str = "UPT", eligible_states: list[str] | None = No
             "tracker": {
                 "team_key": team_key,
                 "eligible_states": eligible_states or ["In Progress"],
-            }
+            },
+            "workspace": {"root": "./workspaces"},
         }
     )
 
@@ -47,13 +49,16 @@ def make_issue() -> Issue:
     )
 
 
-def write_workflow(tmp_path) -> None:
-    (tmp_path / "WORKFLOW.md").write_text(
+def write_workflow(tmp_path) -> str:
+    workflow_path = tmp_path / "WORKFLOW.md"
+    workflow_path.write_text(
         dedent(
             """\
             ---
             tracker:
               team_key: "UPT"
+            workspace:
+              root: "./workspaces"
             ---
 
             Issue {{ issue.identifier }}
@@ -61,6 +66,7 @@ def write_workflow(tmp_path) -> None:
         ),
         encoding="utf-8",
     )
+    return str(workflow_path)
 
 
 class MockAsyncClient:
@@ -227,8 +233,7 @@ class TestLinearIntegrationSuite:
     async def test_poll_tick_treats_linear_as_read_only_boundary(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.chdir(tmp_path)
-        write_workflow(tmp_path)
+        monkeypatch.setenv(WORKFLOW_OVERRIDE_ENV, write_workflow(tmp_path))
         config = make_config()
         dispatcher = Dispatcher(config)
         issue = make_issue()

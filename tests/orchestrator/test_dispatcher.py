@@ -14,7 +14,8 @@ def make_config() -> Config:
                 "eligible_states": ["In Progress"],
                 "labels_include": ["backend", "api"],
                 "labels_exclude": ["blocked"],
-            }
+            },
+            "workspace": {"root": "./workspaces"},
         }
     )
 

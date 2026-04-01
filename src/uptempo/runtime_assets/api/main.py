@@ -1,4 +1,4 @@
-"""Uptempo FastAPI backend — schema metadata API."""
+"""Uptempo FastAPI backend — built-in runtime companion module."""
 
 from __future__ import annotations
 
@@ -27,13 +27,13 @@ async def health() -> dict[str, str]:
 
 # TODO: mount schema router — parse generated OpenAPI schemas, expose
 #       services/methods/message-structure endpoints.
-# from api.routers import schemas
+# from uptempo.runtime_assets.api.routers import schemas
 # app.include_router(schemas.router, prefix="/schemas", tags=["schemas"])
 
 # TODO: mount orchestrator router — trigger and inspect workflow runs.
-# from api.routers import orchestrator
+# from uptempo.runtime_assets.api.routers import orchestrator
 # app.include_router(orchestrator.router, prefix="/orchestrator", tags=["orchestrator"])
 
 # TODO: mount workspace router — list / manage generated workspaces.
-# from api.routers import workspace
+# from uptempo.runtime_assets.api.routers import workspace
 # app.include_router(workspace.router, prefix="/workspaces", tags=["workspaces"])
