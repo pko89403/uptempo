@@ -89,9 +89,12 @@ Schema Generator (에이전트 도구)
   ├── thrift/     → .thrift IDL 파일
   └── websocket/  → AsyncAPI 3.0 YAML 또는 JSON Schema (WebSocket)
 
-Demo Stack (스키마 기반 데모 서비스)
-  ├── api/        → FastAPI 백엔드 (생성된 스키마 기반 stub API 서빙)
-  └── demo/       → Streamlit 데모 페이지 (스키마 시각화 + API 테스트 UI)
+Runtime Assets
+  └── runtime_assets/
+      ├── WORKFLOW.md  → 내장 기본 workflow
+      ├── api/         → FastAPI 백엔드 (built-in runtime companion module)
+      ├── demo/        → Streamlit 데모 페이지 (built-in runtime companion module)
+      └── codex/       → Uptempo 내장 Codex asset surface
 ```
 
 ### 데모 스택
@@ -176,8 +179,8 @@ pytest tests/test_foo.py::test_bar -v   # 단일 테스트 함수
 mypy src/
 
 # 데모 서버 실행
-uvicorn api.main:app --reload --port 8000    # FastAPI 백엔드
-streamlit run demo/app.py --server.port 8501  # Streamlit 데모 페이지
+uvicorn uptempo.runtime_assets.api.main:app --reload --port 8000  # FastAPI 백엔드
+streamlit run src/uptempo/runtime_assets/demo/app.py --server.port 8501  # Streamlit 데모 페이지
 ```
 
 ## 컨벤션
@@ -186,8 +189,7 @@ streamlit run demo/app.py --server.port 8501  # Streamlit 데모 페이지
 
 - 구현은 [SPEC.md](https://github.com/openai/symphony/blob/main/SPEC.md)와 정합성을 유지합니다.
   스펙의 상위집합은 허용하지만 스펙과 충돌해서는 안 됩니다.
-- 런타임 설정은 `WORKFLOW.md` 프론트매터에서 로드합니다. 설정 접근은 반드시 타입 기반 `Config`
-  클래스를 통해 하고, 임의의 환경변수 직접 읽기는 지양합니다.
+- 런타임 설정은 내장 `src/uptempo/runtime_assets/WORKFLOW.md` 프론트매터에서 로드합니다. override가 필요하면 `UPTEMPO_WORKFLOW_PATH`를 명시적으로 사용합니다. 설정 접근은 반드시 타입 기반 `Config` 클래스를 통해 하고, 임의의 환경변수 직접 읽기는 지양합니다.
 - 워크스페이스 안전성이 가장 중요합니다: 코딩 에이전트는 반드시 이슈별 워크스페이스 디렉토리
   안에서만 실행해야 하며, 워크스페이스 경로는 설정된 root 하위에 있어야 합니다.
 
@@ -220,7 +222,7 @@ streamlit run demo/app.py --server.port 8501  # Streamlit 데모 페이지
 - 오케스트레이터 폴 루프와 HTTP 호출에는 `asyncio` 비동기 I/O를 사용합니다.
 - `structlog`으로 구조화된 로깅을 하며, `issue_id`와 `session_id` 컨텍스트 필드를 포함합니다.
 
-### WORKFLOW.md 계약
+### built-in WORKFLOW.md 계약
 
 프롬프트 템플릿은 Liquid 호환 구문을 사용합니다 (`{{ issue.title }}`, `{% if attempt %}`).
 템플릿 변수:

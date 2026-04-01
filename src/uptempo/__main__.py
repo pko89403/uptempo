@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 from uptempo.config.settings import Config
 from uptempo.orchestrator.loop import run_poll_loop
 from uptempo.workflow.loader import WorkflowLoader
+from uptempo.workflow.runtime import load_active_workflow
 
 
 async def _run() -> None:
-    workflow = WorkflowLoader().load(Path.cwd() / "WORKFLOW.md")
+    workflow = load_active_workflow(WorkflowLoader())
     config = Config.from_frontmatter(workflow.config)
     await run_poll_loop(config)
 

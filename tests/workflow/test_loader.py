@@ -60,6 +60,13 @@ def loader() -> WorkflowLoader:
 
 
 class TestLoad:
+    def test_load_default_workflow(self, loader: WorkflowLoader) -> None:
+        result = loader.load_default()
+
+        assert isinstance(result, WorkflowDefinition)
+        assert "workspace" in result.config
+        assert "root" in result.config["workspace"]
+
     def test_load_valid_workflow(self, loader: WorkflowLoader, tmp_path: Path) -> None:
         wf_path = tmp_path / "WORKFLOW.md"
         wf_path.write_text(VALID_WORKFLOW, encoding="utf-8")

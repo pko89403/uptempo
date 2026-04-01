@@ -24,7 +24,8 @@ def make_config(*, team_key: str = "UPT", eligible_states: list[str] | None = No
             "tracker": {
                 "team_key": team_key,
                 "eligible_states": eligible_states or ["In Progress"],
-            }
+            },
+            "workspace": {"root": "./workspaces"},
         }
     )
 

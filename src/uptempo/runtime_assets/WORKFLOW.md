@@ -100,7 +100,7 @@ The agent should be able to talk to Linear, either via a configured Linear MCP s
 - `commit`: produce clean, logical commits after required validation passes.
 - `pull`: sync with the latest `origin/main` before editing and again before handoff.
 - `push`: publish the active branch and keep the PR branch current.
-- `land`: when the ticket reaches `Merging`, explicitly open and follow `.codex/skills/land/SKILL.md`.
+- `land`: when the ticket reaches `Merging`, explicitly open and follow `src/uptempo/runtime_assets/codex/skills/land/SKILL.md`.
 - `schema-orchestrator`: coordinate protocol detection, delegation, cross-validation, and final synthesis.
 - `generate-openapi`, `generate-sse`, `generate-websocket`, `generate-grpc`: primary transport/interface generators for Uptempo schema work.
 - `generate-graphql`, `generate-event-schema`, `generate-webhook`, `generate-mqtt`, `generate-trpc`, `generate-thrift`: alternative interface families to evaluate when the issue points there.
@@ -112,7 +112,7 @@ The agent should be able to talk to Linear, either via a configured Linear MCP s
   - Special case: if a PR is already attached, treat as feedback/rework loop (run full PR feedback sweep, address or explicitly push back, revalidate, return to `Human Review`).
 - `In Progress` -> implementation actively underway.
 - `Human Review` -> PR is attached and validated; waiting on human approval.
-- `Merging` -> approved by human; open `.codex/skills/land/SKILL.md`, run the land flow, and only finish when the PR is merged cleanly.
+- `Merging` -> approved by human; open `src/uptempo/runtime_assets/codex/skills/land/SKILL.md`, run the land flow, and only finish when the PR is merged cleanly.
 - `Rework` -> reviewer requested changes; planning + implementation required.
 - `Done` -> terminal state; no further action required.
 
@@ -126,7 +126,7 @@ The agent should be able to talk to Linear, either via a configured Linear MCP s
      - If PR is already attached, start by reviewing all open PR comments and deciding required changes vs explicit pushback responses.
    - `In Progress` -> continue execution flow from current scratchpad comment.
    - `Human Review` -> wait and poll for decision/review updates.
-   - `Merging` -> on entry, open `.codex/skills/land/SKILL.md`, follow that merge flow, and record the merge evidence.
+   - `Merging` -> on entry, open `src/uptempo/runtime_assets/codex/skills/land/SKILL.md`, follow that merge flow, and record the merge evidence.
    - `Rework` -> run rework flow.
    - `Done` -> do nothing and shut down.
 4. Check whether a PR already exists for the current branch and whether it is closed.
@@ -255,7 +255,7 @@ Use this only when completion is blocked by missing required tools or missing au
 2. Poll for updates as needed, including GitHub PR review comments from humans and bots.
 3. If review feedback requires changes, move the issue to `Rework` and follow the rework flow.
 4. If approved, human moves the issue to `Merging`.
-5. When the issue is in `Merging`, open `.codex/skills/land/SKILL.md`, execute that merge flow, and record merge evidence before moving the issue.
+5. When the issue is in `Merging`, open `src/uptempo/runtime_assets/codex/skills/land/SKILL.md`, execute that merge flow, and record merge evidence before moving the issue.
 6. After merge is complete, move the issue to `Done`.
 
 ## Step 4: Rework handling

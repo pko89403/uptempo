@@ -8,7 +8,7 @@ directly.
 from __future__ import annotations
 
 import os
-from pathlib import Path
+from pathlib import Path  # noqa: TC003
 from typing import Any
 
 import structlog
@@ -37,7 +37,7 @@ class AgentConfig(BaseModel):
 
 
 class WorkspaceConfig(BaseModel):
-    root: Path = Path("workspaces")
+    root: Path
     hooks: dict[str, str] = Field(default_factory=dict)
 
 
@@ -46,7 +46,7 @@ class Config(BaseModel):
 
     tracker: TrackerConfig
     agent: AgentConfig = Field(default_factory=AgentConfig)
-    workspace: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
+    workspace: WorkspaceConfig
 
     @classmethod
     def from_frontmatter(cls, raw: dict[str, Any]) -> Config:

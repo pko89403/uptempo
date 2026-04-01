@@ -3,11 +3,11 @@
 all: fmt lint test typecheck
 
 fmt:
-	black src/ api/ demo/ tests/
-	isort src/ api/ demo/ tests/
+	black src/ tests/
+	isort src/ tests/
 
 lint:
-	ruff check src/ api/ demo/ tests/
+	ruff check src/ tests/
 
 test:
 	pytest tests/ -v

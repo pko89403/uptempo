@@ -1,4 +1,4 @@
-"""Parse WORKFLOW.md into configuration (YAML frontmatter) and prompt template body.
+"""Parse workflow documents into configuration and prompt template body.
 
 Expected format::
 
@@ -11,6 +11,7 @@ Expected format::
 
 from __future__ import annotations
 
+from importlib.resources import files
 from typing import TYPE_CHECKING, Any
 
 import frontmatter
@@ -35,7 +36,7 @@ class WorkflowDefinition:
 
 
 class WorkflowLoader:
-    """Load and parse WORKFLOW.md files."""
+    """Load and parse workflow files."""
 
     def load(self, path: Path) -> WorkflowDefinition:
         """Read *path*, split YAML frontmatter from template body."""
@@ -43,9 +44,18 @@ class WorkflowLoader:
             raise FileNotFoundError(path)
 
         raw = path.read_text(encoding="utf-8")
+        return self._load_raw(raw, source=str(path))
+
+    def load_default(self) -> WorkflowDefinition:
+        """Load the built-in workflow asset shipped with Uptempo."""
+        raw = files("uptempo.runtime_assets").joinpath("WORKFLOW.md").read_text(encoding="utf-8")
+        return self._load_raw(raw, source="uptempo.runtime_assets/WORKFLOW.md")
+
+    def _load_raw(self, raw: str, *, source: str) -> WorkflowDefinition:
+        """Parse raw workflow text from *source*."""
         yaml_str, body = self._split_frontmatter(raw)
         config: dict[str, Any] = yaml.safe_load(yaml_str) or {}
-        logger.debug("workflow_loaded", path=str(path), config_keys=list(config))
+        logger.debug("workflow_loaded", path=source, config_keys=list(config))
         return WorkflowDefinition(config=config, template=body)
 
     @staticmethod
